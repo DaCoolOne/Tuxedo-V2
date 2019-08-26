@@ -82,11 +82,11 @@ class Beetle(BaseAgent):
 			
 			# Calculate a touch with preference for stuff we don't have to jump for.
 			hit = Hit_Prediction(self, self.packet)
-			touch = hit.get_earliest_touch(self, self.packet, self.packet.game_cars[self.index], 120, self.field_info.my_goal.direction * -30)
+			touch = hit.get_earliest_touch(self, self.packet, my_car, 120, self.field_info.my_goal.direction * -30)
 			# Can't get it with normal touch, check for flips.
 			if touch.time > hit.hit_time - 0.25:
 				need_flip = True
-				touch = hit.get_earliest_touch(self, self.packet, self.packet.game_cars[self.index], 180, self.field_info.my_goal.direction * -40)
+				touch = hit.get_earliest_touch(self, self.packet, my_car, 180, self.field_info.my_goal.direction * -40)
 			# Can't get it with flips, check for aerials.
 			# if not touch.can_save:
 				# touch = hit.get_earliest_touch(self, self.packet, self.packet.game_cars[self.index], offset = self.field_info.my_goal.direction * -40)
@@ -96,12 +96,17 @@ class Beetle(BaseAgent):
 			
 			b_g_len = (ball.location + ball.velocity.flatten() - self.field_info.my_goal.location).length()
 			b_g_o = (touch.location - self.field_info.opponent_goal.location).flatten()
-			b_g_o_len = Vec3(b_g_o.x, b_g_o.y * 0.25).length()
+			b_g_o_len = Vec3(b_g_o.x, b_g_o.y).length()
+			
+			c_b_o = (my_car.physics.location - touch.location).flatten()
+			
+			d_p_v = b_g_o.angle_between(c_b_o)
+			d_p_v_2 = b_g_o.angle_between(self.field_info.opponent_goal.direction)
 			
 			bTOGT = ball_in_my_goal_time(self, self.packet)
-			if (b_g_o_len < 1200 and touch.time < hit.hit_time + 0.5) or self.taking_shot:
+			if (d_p_v < math.pi * 0.4 and d_p_v_2 < math.pi * 0.3 and touch.time < hit.hit_time + 0.5 and b_g_o_len < 6000) or self.taking_shot:
 				# Take the shot!
-				self.taking_shot = b_g_o_len < 1500 and touch.is_garunteed
+				self.taking_shot = d_p_v < math.pi * 0.5 and d_p_v_2 < math.pi * 0.4 and b_g_o_len < 6000 and touch.is_garunteed
 				
 				self.controller_state = drive(self, self.packet, touch.location.flatten() + b_g_o.normal(150), touch.time, allow_flips=True)
 				if touch.time < 0.4:
