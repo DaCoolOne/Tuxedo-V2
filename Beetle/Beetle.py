@@ -104,7 +104,7 @@ class Beetle(BaseAgent):
 			d_p_v_2 = b_g_o.angle_between(self.field_info.opponent_goal.direction)
 			
 			bTOGT = ball_in_my_goal_time(self, self.packet)
-			if (d_p_v < math.pi * 0.4 and d_p_v_2 < math.pi * 0.3 and touch.time < hit.hit_time + 0.5 and b_g_o_len < 6000) or self.taking_shot:
+			if (d_p_v < math.pi * 0.4 and d_p_v_2 < math.pi * 0.3 and touch.time < hit.hit_time - 0.5 and b_g_o_len < 6000) or self.taking_shot:
 				# Take the shot!
 				self.taking_shot = d_p_v < math.pi * 0.5 and d_p_v_2 < math.pi * 0.4 and b_g_o_len < 6000 and touch.is_garunteed
 				
