@@ -3,6 +3,8 @@ import math
 from rlbot.agents.base_agent import SimpleControllerState
 from rlbot.utils.structures.game_data_struct import Vector3 as UI_Vec3
 
+from enum import Enum
+
 def constrain(n):
 	return max(-1, min(1, n))
 
@@ -131,6 +133,7 @@ class Car():
 		self.double_jumped = car.double_jumped
 		self.team = car.team
 		self.boost = car.boost
+		self.has_dribble = False
 
 class Boost():
 	def __init__(self, boost):
@@ -214,4 +217,9 @@ class MyControllerState():
 			self.boost,
 			self.handbrake,
 		)
+
+class TouchType(Enum):
+	ground = 0
+	flip = 1
+	aerial = 2
 
