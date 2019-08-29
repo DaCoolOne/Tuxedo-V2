@@ -257,6 +257,29 @@ class Touch():
 		self.is_garunteed = is_garunteed
 		self.can_save = can_save
 
+# Determines time for car to hit a position on the ground.
+def calc_hit(car, position):
+	car_vel = car.physics.velocity
+	car_vel_len = car_vel.length()
+	car_pos = car.physics.location
+	car_face = Vec3(1, 0, 0).align_to(car.physics.rotation)
+	
+	# Calculate the length of the car's path
+	car_path = (position - car_pos).flatten()
+	angle = car_vel.angle_between(car_path)
+	
+	# Length of the path the car must travel
+	turn = turn_radius(car_vel_len) * angle
+	len = car_path.length()
+	
+	# Calculate the time to get to the position
+	turn_time = turn / max(500, car_vel_len)
+	drive_time = Time_to_Pos(max(0.01, len - 200), car_vel_len, car.boost) if car_face.dot(car_vel) > 0.0 else Time_To_Pos_No_Boost(max(0.01, (len - 200)), car_vel_len)
+	
+	drive_time.time += turn_time # + air_time
+	
+	return drive_time
+
 # Predictions from this will be a little off. Need to make it take into account the change of position in the turn
 class Hit_Prediction():
 	def __init__(self, agent, packet):
@@ -281,9 +304,9 @@ class Hit_Prediction():
 						self.hit_time = slice.game_seconds - current_time
 						self.hit_game_seconds = slice.game_seconds
 						self.hit_position = loc
-						self.hit_velocity = 1500 # Dummy value for now :P
+						self.hit_velocity = car.physics.velocity.length() + 600
 				else:
-					hit = self.calc_hit(car, loc)
+					hit = calc_hit(car, loc)
 					if hit.time < slice.game_seconds - current_time:
 						# print(slice.game_seconds - current_time)
 						self.hit_time = slice.game_seconds - current_time
@@ -310,29 +333,6 @@ class Hit_Prediction():
 		renderer.draw_polyline_3d(poly, c)
 		renderer.draw_line_3d(poly[len(poly) - 1], self.hit_position.UI_Vec3(), c)
 	
-	# Determines if a car can hit a position at a time. Designed for ground play.
-	def calc_hit(self, car, position):
-		car_vel = car.physics.velocity
-		car_vel_len = car_vel.length()
-		car_pos = car.physics.location
-		car_face = Vec3(1, 0, 0).align_to(car.physics.rotation)
-		
-		# Calculate the length of the car's path
-		car_path = (position - car_pos).flatten()
-		angle = car_vel.angle_between(car_path) #TODO: SHOULD BE TIMES 2?!
-		
-		# Length of the path the car must travel
-		turn = turn_radius(car_vel_len) * angle
-		len = car_path.length()
-		
-		# Calculate the time to get to the position
-		turn_time = turn / max(500, car_vel_len)
-		drive_time = Time_to_Pos(max(0.01, len - 200), car_vel_len, car.boost) if car_face.dot(car_vel) > 0.0 else Time_To_Pos_No_Boost(max(0.01, (len - 200)), car_vel_len)
-		
-		drive_time.time += turn_time # + air_time
-		
-		return drive_time
-	
 	# Designed for aerials. Calculates the delta v to hit a location at a time.
 	def calc_air(self, car, position, time, grav_z):
 		dv = delta_v(car, position, max(0.0001, time), grav_z, car.physics.velocity + Vec3(0, 0, 300 if car.has_wheel_contact else 0).align_to(car.physics.rotation))
@@ -344,26 +344,34 @@ class Hit_Prediction():
 		if offset is None:
 			offset = Vec3()
 		current_time = packet.game_info.seconds_elapsed
+		
 		goal_pos = agent.field_info.my_goal.location
 		goal_pos.z = min(goal_pos.z, max_height)
 		goal_pos.x = clamp_abs(self.hit_position.x, 650)
-		goal_vec = (goal_pos - self.hit_position).normal(self.hit_velocity)
+		goal_vec = (goal_pos - self.hit_position)
+		
+		if self.hit_time > 0.5:
+			shot_vec = goal_vec.normal(self.hit_velocity * 1.5)
+		else:
+			# Todo, move this vector based on the direction of the other car.
+			shot_vec = goal_vec.normal(self.hit_velocity * 1.5)
+		
 		for i in range(0, self.prediction.num_slices, 3):
 			slice = self.prediction.slices[i]
 			if slice.game_seconds < current_time:
 				continue
-			loc = (slice.physics.location if slice.game_seconds < self.hit_game_seconds else self.hit_position + goal_vec * (slice.game_seconds - self.hit_game_seconds)) + offset
+			loc = (slice.physics.location if slice.game_seconds < self.hit_game_seconds else self.hit_position + shot_vec * (slice.game_seconds - self.hit_game_seconds)) + offset
 			t = slice.game_seconds - current_time
 			if loc.z > 200:
 				air_hit = self.calc_air(car, loc, slice.game_seconds - current_time, packet.game_info.world_gravity_z)
 				if (air_hit.velocity.length() < 850 and t < car.boost * 0.033 and loc.z < max_height) or i >= self.prediction.num_slices - 3 or abs(loc.y) > 5120:
-					return Touch(t, loc, t <= self.hit_time, abs(loc.y) > 5120)
+					return Touch(t, loc, t <= self.hit_time, abs(loc.y) < 5120)
 			else:
 				#car_strike_loc = get_car_strike_loc(loc, packet, car)
 				#hit = self.calc_hit(car, car_strike_loc)
-				hit = self.calc_hit(car, loc)
+				hit = calc_hit(car, loc)
 				if (hit.time < slice.game_seconds - current_time and loc.z < max_height) or i >= self.prediction.num_slices - 3 or abs(loc.y) > 5120:
-					return Touch(max(t, hit.time), loc, t <= self.hit_time, abs(loc.y) > 5120)
+					return Touch(max(t, hit.time), loc, t <= self.hit_time, abs(loc.y) < 5120)
 		
 		return Touch(6, goal_pos, False, True)
 	
@@ -542,7 +550,47 @@ def coast_dist(v_i, v_f=0):
 def brake_dist(v_i, v_f=0):
 	return accel_dist(v_i, v_f, -3500.0) # Brake accel -3500.0
 
+# Gets the boost that we will collect
+def get_corner_boost_index(agent):
+	
+	my_car = agent.packet.game_cars[agent.index]
+	
+	s = sign(clamp_abs(my_car.physics.location.y, 4000) - agent.field_info.my_goal.location.y)
+	s2 = sign(my_car.physics.location.x + my_car.physics.velocity.x * 0.5)
+	
+	max_l = 0
+	max_i = -1
+	
+	for i, boost in enumerate(agent.field_info.boosts):
+		if sign(clamp_abs(my_car.physics.location.y, 4000) - boost.location.y) == s and sign(boost.location.x) == s2 and agent.packet.game_boosts[i].is_active and boost.is_full_boost:
+			if (boost.location.y - agent.field_info.my_goal.location.y) * s > max_l:
+				max_i = i
+				max_l = (boost.location.y - agent.field_info.my_goal.location.y) * s
+		
+	
+	return max_i
+	
 
+# Keeps track of which cars are dribbling the ball
+class Dribble_Tracker:
+	def __init__(self, agent):
+		self.agent = agent
+		self.dribble_timers = []
+	
+	def set_packet(self, packet):
+		ball = packet.game_ball.physics
+		
+		for i, car in enumerate(packet.game_cars):
+			if len(self.dribble_timers) >= i:
+				self.dribble_timers.append(0)
+			
+			# Detects dribble and pushing the ball along the ground.
+			if (ball.location - car.physics.location).length() < 250:
+				self.dribble_timers[i] += self.agent.delta
+			else:
+				self.dribble_timers[i] = 0
+			
+			car.has_dribble = self.dribble_timers[i] > 1
 
 
 
