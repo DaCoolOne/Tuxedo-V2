@@ -38,6 +38,39 @@ class Maneuver_Flip(Maneuver):
 			return dt > self.max_time
 		return False
 
+
+class Precise_Maneuver_Flip(Maneuver):
+	def __init__(self, agent, packet, direction, time=0.8):
+		self.direction = direction
+		self.start_time = packet.game_info.seconds_elapsed
+		self.has_flipped = False
+		self.max_time = time
+		self.f = Vec3(1, 0, 0).align_to(packet.game_cars[agent.index].physics.rotation)
+
+	def update(self, agent, packet):
+		dt = packet.game_info.seconds_elapsed - self.start_time
+		if dt < 0.15:
+			# Jump into air
+			Align_Car_To(agent, packet, self.f, Vec3(0, 0, 1))
+			agent.controller_state.jump = True
+			agent.controller_state.throttle = self.direction.x
+		elif dt < 0.3:
+			# Pause
+			Align_Car_To(agent, packet, self.f, Vec3(0, 0, 1))
+			agent.controller_state.jump = False
+			agent.controller_state.throttle = 0
+		elif not self.has_flipped:
+			# Perform the flip
+			agent.controller_state.jump = True
+			agent.controller_state.pitch = -self.direction.x
+			agent.controller_state.roll = self.direction.y
+			self.has_flipped = True
+		else:
+			agent.controller_state.jump = False
+			# Return control back to the agent
+			return dt > self.max_time
+		return False
+
 class Maneuver_Half_Flip(Maneuver):
 	def __init__(self, agent, packet):
 		self.start_time = packet.game_info.seconds_elapsed
@@ -332,6 +365,37 @@ def drive_catch(agent, packet, target_loc, time_allotted, allow_flips = False):
 		Enter_Flip(agent, packet, Vec3(1, 0, 0))
 	
 	return cs
+
+def JumpShot(agent, position:Vec3):
+	my_car = agent.packet.game_cars[agent.index]
+
+	hit = Hit_Prediction(agent, agent.packet)
+	touch = hit.get_earliest_touch(agent, agent.packet, my_car)
+
+	v1 = touch.location - position
+	vec = (v1 + packet.game_ball.physics.velocity.normal(v1.length() * 0.5)) * 3
+	if vec.length() > 15:
+		vec = vec.normal(15)
+
+	# ball_pos = packet.game_ball.physics.location + packet.game_ball.physics.velocity * 0.2 - vec
+
+	# car_to_ball = ball_pos - my_car.physics.location
+
+	self.controller_state = drive(self, packet,
+								  touch.location + vec - Vec3(20, 0, 100).align_to(my_car.physics.rotation),
+								  touch.time * 0.9)
+
+	# self.controller_state.steer = -correction(my_car, car_to_ball)
+	# self.controller_state.throttle = car_to_ball.len() * 0.3
+
+	if (pos(my_car) - packet.game_ball.physics.location).length() < 200:
+		for car in packet.game_cars:
+			l = car.physics.location + vel(car) * 0.5 - pos(my_car) - vel(my_car) * 0.5
+			self.renderer.draw_line_3d(pos(car).UI_Vec3(), (pos(car) + vel(car) * 0.5).UI_Vec3(), self.renderer.white())
+			if (
+					l.length() < 500.0 and self.team != car.team and not car.is_demolished and car.physics.location.z + car.physics.velocity.z * 0.4 < 280.0):
+				Enter_Flick(self, packet, Vec3(1, 0, 0))
+				return
 
 
 def Dribble(self, packet, position: Vec3):
