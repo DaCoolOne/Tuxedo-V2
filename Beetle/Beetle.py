@@ -31,27 +31,32 @@ class Beetle(BaseAgent):
 		self.state = Defend()
 		self.touch_type = TouchType.ground
 		self.dribble_tracker = Dribble_Tracker(self)
-	
-	def get_output(self, gtp: GameTickPacket):
-		
+		self.hitbox = Hitbox([118.007,84.2,36.159])
+
+	def Preprocessing(self,gtp: GameTickPacket):
 		self.packet = Packet(gtp)
-		
+
 		self.ball_prediction = BallPrediction(self)
-		
+
 		self.delta = self.packet.game_info.seconds_elapsed - self.p_time
 		self.p_time = self.packet.game_info.seconds_elapsed
-		
+
 		self.dribble_tracker.set_packet(self.packet)
-		
+
 		if not self.was_active and self.packet.game_info.is_kickoff_pause:
 			self.maneuver = Kickoff(self, self.packet)
 			self.maneuver_complete = False
 			self.state = Defend()
-		
+
 		self.was_active = self.packet.game_info.is_round_active
-		
+
 		if self.field_info == None:
 			self.field_info = FieldInfo(self, self.get_field_info())
+
+	
+	def get_output(self, gtp: GameTickPacket):
+		
+		self.Preprocessing(gtp)
 		
 		if self.delta == 0:
 			return MyControllerState().get()
