@@ -103,7 +103,7 @@ class Beetle(BaseAgent):
 					next_state = self.state
 			self.state = next_state
 			
-			self.renderer.draw_string_3d((my_car.physics.location).UI_Vec3(), 2, 2, type(self.state).__name__, self.renderer.purple())
+			self.renderer.draw_string_3d((my_car.physics.location).UI_Vec3(), 2, 2, type(self.state).__name__, self.renderer.yellow())
 			
 		
 		self.renderer.end_rendering()
