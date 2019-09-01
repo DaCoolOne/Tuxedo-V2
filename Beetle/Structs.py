@@ -89,18 +89,11 @@ class Rotation():
 		return math.acos(Vec3.dot(Vec3(1, 0, 0).align_to(r), v.normal()))
 	
 
-class Physics():
-	def __init__(self, physics):
-		self.location = Vec3.cast(physics.location)
-		self.velocity = Vec3.cast(physics.velocity)
-		self.rotation = Rotation(physics.rotation)
-		self.angular_velocity = Vec3.cast(physics.angular_velocity)
-
 class Hitbox():
 	def __init__(self,_list):
-		self.length = _list[0]
-		self.width = _list[1]
-		self.height = _list[2]
+		self.length = _list.length
+		self.width = _list.width
+		self.height = _list.height
 
 	def get_offset_by_angle(self,angleDegrees):
 		if abs(angleDegrees) <=45:
@@ -110,9 +103,12 @@ class Hitbox():
 		else:
 			return self.width*.5
 
-
-
-
+class Physics():
+	def __init__(self, physics):
+		self.location = Vec3.cast(physics.location)
+		self.velocity = Vec3.cast(physics.velocity)
+		self.rotation = Rotation(physics.rotation)
+		self.angular_velocity = Vec3.cast(physics.angular_velocity)
 	
 
 class LatestTouch():
@@ -152,6 +148,7 @@ class Car():
 		self.team = car.team
 		self.boost = car.boost
 		self.has_dribble = False
+		self.hitbox = Hitbox(car.hitbox)
 
 class Boost():
 	def __init__(self, boost):
