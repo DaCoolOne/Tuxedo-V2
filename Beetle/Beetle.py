@@ -1,5 +1,6 @@
 import math
 import os
+import time
 import multiprocessing
 
 from rlbot.agents.base_agent import BaseAgent
@@ -10,27 +11,15 @@ from Structs import *
 from Utils import *
 from Actions import *
 from States import *
-from Prediction import Hit_Package
 
-class Hit_Package:
-	def __init__(self, hit, ground_touch, flip_touch, air_touch = None):
-		self.hit = hit.get_simple()
-		self.ground_touch = ground_touch
-		self.flip_touch = flip_touch
-		self.air_touch = air_touch
-
-def calculate_earliest_touch(agent):
-	hit = Hit_Prediction(agent, agent.packet)
-	touch1 = hit.get_earliest_touch(agent, agent.packet, my_car, 120, my_goal.direction * -30)
-	touch2 = hit.get_earliest_touch(agent, agent.packet, my_car, 180, my_goal.direction * -40)
-	
-	return Hit_Package(hit, touch1, touch2)
+from Prediction import get_queue
 
 class Beetle(BaseAgent):
 	
 	def __init__(self, name, team, index):
 		super().__init__(name, team, index)
 		self.key = f"69 420 {index}"
+		self.hit_prediction_queue = get_queue(self.key)
 	
 	def initialize_agent(self):
 		self.packet = None
@@ -53,11 +42,14 @@ class Beetle(BaseAgent):
 		self.state = Defend()
 		self.touch_type = TouchType.ground
 		self.dribble_tracker = Dribble_Tracker(self)
+		self.hit = None
+		self.touch = None
+		self.field_info = FieldInfo(self, self.get_field_info())
 		# self.communication_queue = 
 
 	def Preprocessing(self, gtp: GameTickPacket):
 		self.packet = Packet(gtp)
-		self.ball_prediction = BallPrediction(self)
+		self.ball_prediction = BallPrediction(self.get_ball_prediction_struct())
 		
 		self.delta = self.packet.game_info.seconds_elapsed - self.p_time
 		self.p_time = self.packet.game_info.seconds_elapsed
@@ -71,12 +63,11 @@ class Beetle(BaseAgent):
 		
 		self.was_active = self.packet.game_info.is_round_active
 		
-		if self.field_info == None:
-			self.field_info = FieldInfo(self, self.get_field_info())
 	
 	def get_helper_process_request(self):
 		fp = os.path.dirname(os.path.realpath(__file__))
-		return HelperProcessRequest(python_file_path=fp+"\\Prediction.py",key=self.key)
+		self.helper_process = HelperProcessRequest(python_file_path=fp+"\\Prediction.py",key=self.key)
+		return self.helper_process
 	
 	def get_output(self, gtp: GameTickPacket):
 		
@@ -107,18 +98,37 @@ class Beetle(BaseAgent):
 					# self.touch_type = TouchType.flip
 			
 			# Calculate a touch with preference for stuff we don't have to jump for.
-			hit = Hit_Prediction(self, self.packet)
-			touch = hit.get_earliest_touch(self, self.packet, my_car, 120, my_goal.direction * -30)
+			# hit = Hit_Prediction(self, self.packet)
+			# touch = hit.get_earliest_touch(self, self.packet, my_car, 120, my_goal.direction * -30)
 			
-			self.touch_type = TouchType.ground
+			# self.touch_type = TouchType.ground
 			
 			# Can't get it with normal touch, check for flips.
-			if touch.time > hit.hit_time - 0.25:
-				self.touch_type = TouchType.flip
-				touch = hit.get_earliest_touch(self, self.packet, my_car, 180, my_goal.direction * -40)
+			# if touch.time > hit.hit_time - 0.25:
+				# self.touch_type = TouchType.flip
+				# touch = hit.get_earliest_touch(self, self.packet, my_car, 180, my_goal.direction * -40)
 			
-			self.hit = hit
-			self.touch = touch
+			# Calculate a touch with preference for stuff we don't have to jump for.
+			
+			# Wait for hit to be created
+			while self.hit is None and self.hit_prediction_queue.empty():
+				time.sleep(0.05)
+			
+			# Update latest hits (Use while loop so that we always have latest data)
+			while not self.hit_prediction_queue.empty():
+				hit_package = self.helper_process.metadata_queue.get()
+				
+				hit = hit_package.hit
+				touch = hit_package.ground_touch
+				self.touch_type = TouchType.ground
+				
+				# Can't get it with normal touch, check for flips.
+				if touch.time > hit.hit_time - 0.25:
+					self.touch_type = TouchType.flip
+					touch = hit_package.flip_touch
+				
+				self.hit = hit
+				self.touch = touch
 			
 			next_state = self.state.output(self, self.packet)
 			if next_state is None:

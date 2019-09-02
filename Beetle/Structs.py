@@ -179,19 +179,19 @@ class BoostInfo():
 	
 
 class FieldInfo():
-	def __init__(self, agent, f):
+	def __init__(self, agent, field_info):
 		self.full_boosts = []
 		self.boosts = []
 		self.my_goal = None
 		self.opponent_goal = None
-		for i in range(f.num_goals):
-			goal = f.goals[i]
+		for i in range(field_info.num_goals):
+			goal = field_info.goals[i]
 			if goal.team_num == agent.team:
 				self.my_goal = GoalInfo(goal)
 			else:
 				self.opponent_goal = GoalInfo(goal)
-		for i in range(f.num_boosts):
-			boost = BoostInfo(f.boost_pads[i])
+		for i in range(field_info.num_boosts):
+			boost = BoostInfo(field_info.boost_pads[i])
 			self.boosts.append(boost)
 			if boost.is_full_boost:
 				self.full_boosts.append(boost)
@@ -202,8 +202,7 @@ class Slice:
 		self.game_seconds = s.game_seconds
 
 class BallPrediction:
-	def __init__(self, agent):
-		prediction = agent.get_ball_prediction_struct()
+	def __init__(self, prediction):
 		self.slices = []
 		self.num_slices = prediction.num_slices
 		for i in range(prediction.num_slices):
@@ -238,3 +237,10 @@ class TouchType(Enum):
 	flip = 1
 	aerial = 2
 
+
+class Hit_Package:
+	def __init__(self, hit, ground_touch, flip_touch, air_touch = None):
+		self.hit = hit.get_simple()
+		self.ground_touch = ground_touch
+		self.flip_touch = flip_touch
+		self.air_touch = air_touch
