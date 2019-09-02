@@ -280,6 +280,13 @@ def calc_hit(car, position):
 	
 	return drive_time
 
+class Simple_Hit_Prediction:
+	def __init__(self, hit_prediction):
+		self.hit_time = hit_prediction.hit_time
+		self.hit_game_seconds = hit_prediction.hit_game_seconds
+		self.hit_velocity = hit_prediction.hit_velocity
+		self.hit_position = hit_prediction.hit_position
+
 # Predictions from this will be a little off. Need to make it take into account the change of position in the turn
 class Hit_Prediction():
 	def __init__(self, agent, packet):
@@ -374,6 +381,9 @@ class Hit_Prediction():
 					return Touch(max(t, hit.time), loc, t <= self.hit_time, abs(loc.y) < 5120)
 		
 		return Touch(6, goal_pos, False, True)
+	
+	def get_simple(self):
+		return Simple_Hit_Prediction(self)
 	
 
 def render_star(self, position: Vec3, color, size = 100):

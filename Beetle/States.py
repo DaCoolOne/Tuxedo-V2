@@ -178,9 +178,12 @@ class Grab_Boost(State):
 		
 		c_boost = get_corner_boost_index(agent)
 		
+		if c_boost < 0:
+			return Defend()
+		
 		# Collect a boost pad
 		agent.controller_state = drive(agent, packet, agent.field_info.boosts[c_boost].location, 0.1, 0, allow_flips = True)
 		
-		if my_car.boost > 90 or agent.hit.hit_time < 0.5 or c_boost < 0:
+		if my_car.boost > 90 or agent.hit.hit_time < 0.5:
 			return Defend()
 	
