@@ -1,7 +1,8 @@
-import time
 
-from Structs import Packet, BallPrediction, FieldInfo, Hit_Package
-from Utils import Hit_Prediction
+import os
+import sys
+
+import time
 
 from rlbot.utils.structures.game_interface import GameInterface
 from rlbot.utils.structures.game_data_struct import GameTickPacket, FieldInfoPacket
@@ -12,14 +13,15 @@ from rlbot.utils.logging_utils import get_logger
 
 from queue import Queue
 
-# This is the part that just isn't working at all. The queues need to be the same. I have created a unique key, but I can't get the bot to access the queue that the BotHelperProcess creates, and I can't seem to create my own queue and use that. Everything else should either function or be really close to functioning.
-# Also, may want to remove the unpackaging of the BallPrediction object from Beetle since it won't be used as much.
-hit_prediction_queues = {}
-def get_queue(key):
-	if not key in hit_prediction_queues:
-		print("Create hit prediction queue: "+key)
-		hit_prediction_queues[key] = Queue()
-	return hit_prediction_queues.get(key)
+# Oh the lengths I go to just to do a simple import :P
+current_path = os.path.dirname(os.path.realpath(__file__))
+sys.path.append(current_path)
+
+from Structs import Packet, BallPrediction, FieldInfo, Hit_Package
+from Utils import Hit_Prediction
+
+# SetupManager.helper_process_manager -> Stores the HelperProcessManager that the game uses
+# HelperProcessManager.helper_process_map[key] -> Stores the process that we want
 
 class Hit_Predictor(BotHelperProcess):
 	
@@ -27,9 +29,9 @@ class Hit_Predictor(BotHelperProcess):
 		super().__init__(agent_metadata_queue, quit_event, options)
 		self.logger = get_logger('Beetle')
 		self.game_interface = GameInterface(self.logger)
-		self.bot_agent = None
 	
 	def start(self):
+		
 		self.game_interface.load_interface()
 		
 		field_info = FieldInfoPacket()
@@ -45,7 +47,7 @@ class Hit_Predictor(BotHelperProcess):
 		self.team = single_agent_metadata.team
 		
 		# This is where the queues would be linked. Currently this method utterly fails and needs to be fixed.
-		self.hit_prediction_queue = get_queue(single_agent_metadata.helper_process_request.key)
+		self.hit_prediction_queue = single_agent_metadata.helper_process_request.options.get("queue") # get_queue(single_agent_metadata.helper_process_request.key)
 		self.logger.debug(single_agent_metadata.helper_process_request.key)
 		
 		self.field_info = FieldInfo(self, field_info)
@@ -75,8 +77,11 @@ class Hit_Predictor(BotHelperProcess):
 			touch2 = hit.get_earliest_touch(self, self.packet, my_car, 180, my_goal.direction * -40)
 			
 			self.hit_prediction_queue.put_nowait(Hit_Package(hit, touch1, touch2))
-			
 		
 		self.logger.debug("Quit Beetle Prediction services")
 	
+
+
+
+
 

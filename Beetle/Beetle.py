@@ -1,7 +1,7 @@
 import math
 import os
 import time
-import multiprocessing
+from multiprocessing import Manager, Queue
 
 from rlbot.agents.base_agent import BaseAgent
 from rlbot.utils.structures.game_data_struct import GameTickPacket
@@ -12,7 +12,19 @@ from Utils import *
 from Actions import *
 from States import *
 
-from Prediction import get_queue
+# from Prediction import get_queue
+
+# This is the part that just isn't working at all. The queues need to be the same. I have created a unique key, but I can't get the bot to access the queue that the BotHelperProcess creates, and I can't seem to create my own queue and use that. Everything else should either function or be really close to functioning.
+# Also, may want to remove the unpackaging of the BallPrediction object from Beetle since it won't be used as much.
+hit_prediction_queues = {}
+hit_prediction_managers = {}
+def get_queue(key):
+	if not key in hit_prediction_queues:
+		print("Create hit prediction queue: "+key)
+		m = Manager()
+		hit_prediction_managers[key] = m
+		hit_prediction_queues[key] = m.Queue()
+	return hit_prediction_queues.get(key)
 
 class Beetle(BaseAgent):
 	
@@ -65,8 +77,11 @@ class Beetle(BaseAgent):
 		
 	
 	def get_helper_process_request(self):
-		fp = os.path.dirname(os.path.realpath(__file__))
-		self.helper_process = HelperProcessRequest(python_file_path=fp+"\\Prediction.py",key=self.key)
+		fp = os.path.join(os.path.dirname(os.path.realpath(__file__)), "Prediction.py")
+		options = {
+			"queue":self.hit_prediction_queue,
+		}
+		self.helper_process = HelperProcessRequest(fp,self.key,None,options) # Can't use "key=" syntax here because it will mess with obfuscator
 		return self.helper_process
 	
 	def get_output(self, gtp: GameTickPacket):

@@ -237,7 +237,6 @@ class TouchType(Enum):
 	flip = 1
 	aerial = 2
 
-
 class Hit_Package:
 	def __init__(self, hit, ground_touch, flip_touch, air_touch = None):
 		self.hit = hit.get_simple()
