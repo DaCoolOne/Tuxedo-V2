@@ -62,7 +62,7 @@ class Vec3:
 		return str(self.x) + "," + str(self.y) + "," + str(self.z)
 	
 	def cast(v):
-		return Vec3(v.x, v.y, v.z)
+		return Vec3(float(v.x), float(v.y), float(v.z))
 	
 	def dot(v1, v2):
 		return v1.x*v2.x+v1.y*v2.y+v1.z*v2.z
@@ -236,10 +236,3 @@ class TouchType(Enum):
 	ground = 0
 	flip = 1
 	aerial = 2
-
-class Hit_Package:
-	def __init__(self, hit, ground_touch, flip_touch, air_touch = None):
-		self.hit = hit.get_simple()
-		self.ground_touch = ground_touch
-		self.flip_touch = flip_touch
-		self.air_touch = air_touch

@@ -17,8 +17,8 @@ from queue import Queue
 current_path = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(current_path)
 
-from Structs import Packet, BallPrediction, FieldInfo, Hit_Package
-from Utils import Hit_Prediction
+from Structs import Packet, BallPrediction, FieldInfo
+from Utils import Hit_Prediction, Touch, Hit_Package
 
 # SetupManager.helper_process_manager -> Stores the HelperProcessManager that the game uses
 # HelperProcessManager.helper_process_map[key] -> Stores the process that we want
@@ -76,7 +76,7 @@ class Hit_Predictor(BotHelperProcess):
 			touch1 = hit.get_earliest_touch(self, self.packet, my_car, 120, my_goal.direction * -30)
 			touch2 = hit.get_earliest_touch(self, self.packet, my_car, 180, my_goal.direction * -40)
 			
-			self.hit_prediction_queue.put_nowait(Hit_Package(hit, touch1, touch2))
+			self.hit_prediction_queue.put_nowait(Hit_Package(hit.get_simple(), touch1, touch2, Touch()).to_list())
 		
 		self.logger.debug("Quit Beetle Prediction services")
 	

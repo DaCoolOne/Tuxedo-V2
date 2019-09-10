@@ -57,6 +57,7 @@ class Beetle(BaseAgent):
 		self.hit = None
 		self.touch = None
 		self.field_info = FieldInfo(self, self.get_field_info())
+		self.hit_package = None
 		# self.communication_queue = 
 
 	def Preprocessing(self, gtp: GameTickPacket):
@@ -95,55 +96,39 @@ class Beetle(BaseAgent):
 		
 		self.renderer.begin_rendering()
 		
+		arc_turn = ArcTurn(my_car.physics.location, Vec3(1, 0, 0).align_to(my_car.physics.rotation), self.packet.game_ball.physics.location)
+		if arc_turn.valid:
+			arc_turn.render(self.renderer, self.renderer.blue())
+		
 		self.controller_state = MyControllerState()
 		
 		my_goal = self.field_info.my_goal
+		
+		# Wait for hit to be created if we haven't created a hit package yet
+		while self.hit_package is None and self.hit_prediction_queue.empty():
+			time.sleep(0.05)
+		
+		# Update latest hits (Use while loop so that we always have latest data)
+		while not self.hit_prediction_queue.empty():
+			self.hit_package = Hit_Package.from_list(self.hit_prediction_queue.get(), self.p_time)
 		
 		if not self.maneuver_complete:
 			self.maneuver_complete = self.maneuver.update(self, self.packet)
 			self.renderer.draw_string_3d(my_car.physics.location.UI_Vec3(), 2, 2, type(self.maneuver).__name__, self.renderer.red())
 		else:
 			
-			# Can't get it with flips, check for aerials.
-			# if touch.time > hit.hit_time + 0.25:
-				# touch = hit.get_earliest_touch(self, self.packet, self.packet.game_cars[self.index], offset = self.field_info.my_goal.direction * -60 + Vec3(0, 80, 0))
-				# if touch.location.z > 160:
-					# self.touch_type = TouchType.aerial
-				# else:
-					# self.touch_type = TouchType.flip
-			
 			# Calculate a touch with preference for stuff we don't have to jump for.
-			# hit = Hit_Prediction(self, self.packet)
-			# touch = hit.get_earliest_touch(self, self.packet, my_car, 120, my_goal.direction * -30)
-			
-			# self.touch_type = TouchType.ground
+			hit = self.hit_package.hit
+			touch = self.hit_package.ground_touch
+			self.touch_type = TouchType.ground
 			
 			# Can't get it with normal touch, check for flips.
-			# if touch.time > hit.hit_time - 0.25:
-				# self.touch_type = TouchType.flip
-				# touch = hit.get_earliest_touch(self, self.packet, my_car, 180, my_goal.direction * -40)
+			if touch.time > hit.hit_time - 0.25:
+				self.touch_type = TouchType.flip
+				touch = self.hit_package.flip_touch
 			
-			# Calculate a touch with preference for stuff we don't have to jump for.
-			
-			# Wait for hit to be created
-			while self.hit is None and self.hit_prediction_queue.empty():
-				time.sleep(0.05)
-			
-			# Update latest hits (Use while loop so that we always have latest data)
-			while not self.hit_prediction_queue.empty():
-				hit_package = self.helper_process.metadata_queue.get()
-				
-				hit = hit_package.hit
-				touch = hit_package.ground_touch
-				self.touch_type = TouchType.ground
-				
-				# Can't get it with normal touch, check for flips.
-				if touch.time > hit.hit_time - 0.25:
-					self.touch_type = TouchType.flip
-					touch = hit_package.flip_touch
-				
-				self.hit = hit
-				self.touch = touch
+			self.hit = hit
+			self.touch = touch
 			
 			next_state = self.state.output(self, self.packet)
 			if next_state is None:

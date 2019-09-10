@@ -1,5 +1,6 @@
 import math
 import os
+import numpy as np
 
 from rlbot.utils.structures.game_data_struct import GameTickPacket
 
@@ -63,6 +64,131 @@ def curvature(v):
 		return 0.001800 - 0.40e-6 * v
 	else:
 		return 0.0
+
+
+# Turning stuff
+class Vec2:
+	
+	def __init__(self, x=0, y=0):
+		self.x = x
+		self.y = y
+	
+	def __add__(v1, v2):
+		return Vec2(v1.x + v2.x, v1.y + v2.y)
+	
+	def __sub__(v1, v2):
+		return Vec2(v1.x - v2.x, v1.y - v2.y)
+	
+	def __mul__(self, n):
+		return Vec2(self.x * n, self.y * n)
+	
+	def length(self):
+		return math.sqrt(self.x*self.x+self.y*self.y)
+	
+	def normal(self, n=1):
+		length = n / self.length()
+		return Vec2(self.x * length, self.y * length)
+	
+	def inflate(self, n=0):
+		return Vec3(self.x, self.y, n)
+	
+	def cross(v1, v2):
+		return v1.x * v2.y - v1.y * v2.x
+	
+	def cast(v):
+		return Vec2(v.x, v.y)
+	
+	def rot90(v):
+		return Vec2(v.y, -v.x)
+	
+	def dot(v1, v2):
+		return v1.x * v2.x + v1.y * v2.y
+	
+	def angle_between(v1, v2):
+		return math.acos(v1.normal().dot(v2.normal()))
+	
+	def angle(self):
+		return math.atan2(self.y, self.x)
+	
+
+class Ray2D:
+	
+	def __init__(self, location = Vec2(), direction = Vec2()):
+		self.location = Vec2.cast(location)
+		self.direction = Vec2.cast(direction)
+	
+	# t = (q − p) × s / (r × s)
+	def intersection(v1, v2):
+		# Credits to stack overflow
+		p = v1.location
+		q = v2.location
+		r = v1.direction
+		s = v2.direction
+		
+		div_t = r.cross(s)
+		
+		if div_t == 0:
+			return
+		
+		t = (q - p).cross(s) / div_t
+		
+		return p + (r * t)
+		
+	
+
+class ArcTurn:
+	
+	def __init__(self, location, direction, point):
+		
+		# If something goes wrong, this will be false
+		self.valid = False
+		
+		forward = Vec2.cast(direction)
+		self.car = Ray2D(Vec2.cast(location), forward.rot90())
+		self.target_loc = Vec2.cast(point)
+		
+		center = (self.car.location + self.target_loc) * 0.5
+		c_dir = (self.car.location - self.target_loc).rot90()
+		c_ray = Ray2D(center, c_dir)
+		
+		c = self.car.intersection(c_ray)
+		
+		if c is None:
+			return
+		
+		self.center = c
+		self.radius = (self.car.location - self.center).length()
+		
+		self.v1 = self.car.location - self.center
+		self.v2 = self.target_loc - self.center
+		
+		ang = self.v1.angle_between(self.v2)
+		
+		if forward.dot(self.v2) > 0:
+			self.arc_angle = ang
+		else:
+			self.arc_angle = (math.pi * 2 - ang)
+		
+		self.arc_length = self.arc_angle * self.radius
+		
+		self.valid = True
+	
+	def time_at_speed(self, s):
+		return self.arc_length / s
+	
+	def render(self, renderer, color, total_points = 10):
+		points = []
+		
+		if total_points > 2:
+			start_angle = self.v1.angle()
+			add = 1 if abs(constrain_pi(start_angle - self.v2.angle() + self.arc_angle)) < math.pi * 0.5 else -1
+			point_space = self.arc_angle / total_points
+			for i in range(total_points):
+				angle = start_angle + i * point_space
+				points.append(UI_Vec3(self.center.x + math.cos(angle) * self.radius, self.center.y + math.sin(angle) * self.radius, 20))
+		
+		renderer.draw_polyline_3d(points, color)
+	
 
 class Hit():
 	def __init__(self, time = None, velocity = None, location = None):
@@ -250,12 +376,25 @@ def Time_to_Pos_Old(car, position, velocity, no_correction = False):
 	return Hit(a, b)
 	
 
-class Touch():
-	def __init__(self, time, location, is_garunteed = False, can_save = True):
+class Touch:
+	def __init__(self, time = 0, location = Vec3(), is_garunteed = False, can_save = True):
 		self.time = time
 		self.location = location
 		self.is_garunteed = is_garunteed
 		self.can_save = can_save
+	
+	def to_numpy(self):
+		n = np.zeros(6)
+		n[0] = self.time
+		n[1] = self.location.x
+		n[2] = self.location.y
+		n[3] = self.location.z
+		n[4] = self.is_garunteed
+		n[5] = self.can_save
+		return n
+	
+	def from_numpy(n):
+		return Touch(n[0], Vec3(n[1], n[2], n[3]), n[4], n[5])
 
 # Determines time for car to hit a position on the ground.
 def calc_hit(car, position):
@@ -281,11 +420,34 @@ def calc_hit(car, position):
 	return drive_time
 
 class Simple_Hit_Prediction:
-	def __init__(self, hit_prediction):
-		self.hit_time = hit_prediction.hit_time
-		self.hit_game_seconds = hit_prediction.hit_game_seconds
-		self.hit_velocity = hit_prediction.hit_velocity
-		self.hit_position = hit_prediction.hit_position
+	def __init__(self, hit_prediction = None):
+		if not hit_prediction is None:
+			self.hit_time = hit_prediction.hit_time
+			self.hit_game_seconds = hit_prediction.hit_game_seconds
+			self.hit_velocity = hit_prediction.hit_velocity
+			self.hit_position = hit_prediction.hit_position
+		else:
+			self.hit_time = 0
+			self.hit_game_seconds = 0
+			self.hit_velocity = 0
+			self.hit_position = Vec3()
+	
+	def to_numpy(self):
+		n = np.zeros(5)
+		n[0] = self.hit_game_seconds
+		n[1] = self.hit_velocity
+		n[2] = self.hit_position.x
+		n[3] = self.hit_position.y
+		n[4] = self.hit_position.z
+		return n
+	
+	def from_numpy(n, game_time):
+		s = Simple_Hit_Prediction()
+		s.hit_time = n[0] - game_time
+		s.hit_game_seconds = n[0]
+		s.hit_velocity = n[1]
+		s.hit_position = Vec3(n[2], n[3], n[4])
+		return s
 
 # Predictions from this will be a little off. Need to make it take into account the change of position in the turn
 class Hit_Prediction():
@@ -602,6 +764,18 @@ class Dribble_Tracker:
 			
 			car.has_dribble = self.dribble_timers[i] > 1
 
+class Hit_Package:
+	def __init__(self, hit, ground_touch, flip_touch, air_touch):
+		self.hit = hit
+		self.ground_touch = ground_touch
+		self.flip_touch = flip_touch
+		self.air_touch = air_touch
+	
+	def to_list(self):
+		return [self.hit.to_numpy(), self.ground_touch.to_numpy(), self.flip_touch.to_numpy(), self.air_touch.to_numpy()]
+	
+	def from_list(_list, game_time):
+		return Hit_Package(Simple_Hit_Prediction.from_numpy(_list[0], game_time), Touch.from_numpy(_list[1]), Touch.from_numpy(_list[2]), Touch.from_numpy(_list[3]))
 
 
 
