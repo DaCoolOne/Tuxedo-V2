@@ -165,9 +165,9 @@ class ArcTurn:
 		ang = self.v1.angle_between(self.v2)
 		
 		if forward.dot(self.v2) > 0:
-			self.arc_angle = ang
+			self.arc_angle = abs(ang)
 		else:
-			self.arc_angle = (math.pi * 2 - ang)
+			self.arc_angle = abs(math.pi * 2 - ang)
 		
 		self.arc_length = self.arc_angle * self.radius
 		
@@ -181,10 +181,10 @@ class ArcTurn:
 		
 		if total_points > 2:
 			start_angle = self.v1.angle()
-			add = 1 if abs(constrain_pi(start_angle - self.v2.angle() + self.arc_angle)) < math.pi * 0.5 else -1
+			add = 1 if abs(constrain_pi(start_angle + self.arc_angle - self.v2.angle())) < math.pi * 0.5 else -1
 			point_space = self.arc_angle / total_points
 			for i in range(total_points):
-				angle = start_angle + i * point_space
+				angle = start_angle + i * point_space * add
 				points.append(UI_Vec3(self.center.x + math.cos(angle) * self.radius, self.center.y + math.sin(angle) * self.radius, 20))
 		
 		renderer.draw_polyline_3d(points, color)
@@ -733,8 +733,8 @@ def get_corner_boost_index(agent):
 	max_l = 0
 	max_i = -1
 	
-	for i, boost in enumerate(agent.field_info.boosts):
-		if sign(clamp_abs(my_car.physics.location.y, 4000) - boost.location.y) == s and sign(boost.location.x) == s2 and agent.packet.game_boosts[i].is_active and boost.is_full_boost:
+	for i, boost in enumerate(agent.field_info.full_boosts):
+		if sign(clamp_abs(my_car.physics.location.y, 4000) - boost.location.y) == s and sign(boost.location.x) == s2 and agent.packet.game_boosts[boost.index].is_active:
 			if (boost.location.y - agent.field_info.my_goal.location.y) * s > max_l:
 				max_i = i
 				max_l = (boost.location.y - agent.field_info.my_goal.location.y) * s

@@ -1,5 +1,7 @@
 from Utils import *
 
+import math
+
 from enum import Enum
 
 class Maneuver:
@@ -258,6 +260,14 @@ def drive(agent, packet, target_loc, time_allotted, target_v=-1, min_straight_sp
 	car_v = car.physics.velocity.flatten() # Car velocity
 	car_dir = Vec3(1, 0, 0).align_to(car.physics.rotation) # Car direction
 	
+	on_ground = abs(car_dir.z) < 0.1
+	
+	arc_turn = ArcTurn(car_p, car_dir, target_loc)
+	if arc_turn.valid:
+		arc_turn.render(agent.renderer, agent.renderer.blue())
+	
+	max_turn = turn_radius(car_v.length())
+	
 	if abs(car_p.x) < 885 and abs(car_p.y) > 5050 and abs(target_loc.x) > 800: # Car in net
 		target_loc.x = 800 * sign(target_loc.x)
 	
@@ -279,7 +289,7 @@ def drive(agent, packet, target_loc, time_allotted, target_v=-1, min_straight_sp
 	
 	cs = MyControllerState()
 	cs.steer = steer_for_heading_err(heading_err)
-	cs.handbrake = car_v.length() > 400 and heading_err_deg_abs > min_heading_err_for_handbrake and car_to_loc.length() < 2000
+	cs.handbrake = car_v.length() > 500 and max_turn > arc_turn.radius and on_ground
 	
 	if target_speed < min_straight_spd and heading_err_deg_abs < 10:
 		cs.throttle = 0.0

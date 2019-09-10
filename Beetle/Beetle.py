@@ -12,10 +12,9 @@ from Utils import *
 from Actions import *
 from States import *
 
-# from Prediction import get_queue
+# Turn off in order fix hot reloads
+USE_HELPER_PROCESS = True
 
-# This is the part that just isn't working at all. The queues need to be the same. I have created a unique key, but I can't get the bot to access the queue that the BotHelperProcess creates, and I can't seem to create my own queue and use that. Everything else should either function or be really close to functioning.
-# Also, may want to remove the unpackaging of the BallPrediction object from Beetle since it won't be used as much.
 hit_prediction_queues = {}
 hit_prediction_managers = {}
 def get_queue(key):
@@ -30,8 +29,9 @@ class Beetle(BaseAgent):
 	
 	def __init__(self, name, team, index):
 		super().__init__(name, team, index)
-		self.key = f"69 420 {index}"
-		self.hit_prediction_queue = get_queue(self.key)
+		if USE_HELPER_PROCESS:
+			self.key = f"69 420 {index}"
+			self.hit_prediction_queue = get_queue(self.key)
 	
 	def initialize_agent(self):
 		self.packet = None
@@ -59,7 +59,7 @@ class Beetle(BaseAgent):
 		self.field_info = FieldInfo(self, self.get_field_info())
 		self.hit_package = None
 		# self.communication_queue = 
-
+	
 	def Preprocessing(self, gtp: GameTickPacket):
 		self.packet = Packet(gtp)
 		self.ball_prediction = BallPrediction(self.get_ball_prediction_struct())
@@ -78,12 +78,13 @@ class Beetle(BaseAgent):
 		
 	
 	def get_helper_process_request(self):
-		fp = os.path.join(os.path.dirname(os.path.realpath(__file__)), "Prediction.py")
-		options = {
-			"queue":self.hit_prediction_queue,
-		}
-		self.helper_process = HelperProcessRequest(fp,self.key,None,options) # Can't use "key=" syntax here because it will mess with obfuscator
-		return self.helper_process
+		if USE_HELPER_PROCESS:
+			fp = os.path.join(os.path.dirname(os.path.realpath(__file__)), "Prediction.py")
+			options = {
+				"queue":self.hit_prediction_queue,
+			}
+			self.helper_process = HelperProcessRequest(fp,self.key,None,options) # Can't use "key=" syntax here because it will mess with obfuscator
+			return self.helper_process
 	
 	def get_output(self, gtp: GameTickPacket):
 		
@@ -96,21 +97,24 @@ class Beetle(BaseAgent):
 		
 		self.renderer.begin_rendering()
 		
-		arc_turn = ArcTurn(my_car.physics.location, Vec3(1, 0, 0).align_to(my_car.physics.rotation), self.packet.game_ball.physics.location)
-		if arc_turn.valid:
-			arc_turn.render(self.renderer, self.renderer.blue())
-		
 		self.controller_state = MyControllerState()
 		
 		my_goal = self.field_info.my_goal
 		
-		# Wait for hit to be created if we haven't created a hit package yet
-		while self.hit_package is None and self.hit_prediction_queue.empty():
-			time.sleep(0.05)
-		
-		# Update latest hits (Use while loop so that we always have latest data)
-		while not self.hit_prediction_queue.empty():
-			self.hit_package = Hit_Package.from_list(self.hit_prediction_queue.get(), self.p_time)
+		if USE_HELPER_PROCESS:
+			# Wait for hit to be created if we haven't created a hit package yet
+			while self.hit_package is None and self.hit_prediction_queue.empty():
+				time.sleep(0.05)
+			
+			# Update latest hits (Use while loop so that we always have latest data)
+			while not self.hit_prediction_queue.empty():
+				self.hit_package = Hit_Package.from_list(self.hit_prediction_queue.get(), self.p_time)
+		else:
+			hit = Hit_Prediction(self, self.packet)
+			touch1 = hit.get_earliest_touch(self, self.packet, my_car, 120, my_goal.direction * -30)
+			touch2 = hit.get_earliest_touch(self, self.packet, my_car, 180, my_goal.direction * -40)
+			
+			self.hit_package = Hit_Package(hit.get_simple(), touch1, touch2, Touch())
 		
 		if not self.maneuver_complete:
 			self.maneuver_complete = self.maneuver.update(self, self.packet)

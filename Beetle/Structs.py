@@ -173,9 +173,10 @@ class GoalInfo():
 		self.direction = Vec3.cast(goal.direction)
 
 class BoostInfo():
-	def __init__(self, boost):
+	def __init__(self, boost, index):
 		self.location = Vec3.cast(boost.location)
 		self.is_full_boost = boost.is_full_boost
+		self.index = index
 	
 
 class FieldInfo():
@@ -191,7 +192,7 @@ class FieldInfo():
 			else:
 				self.opponent_goal = GoalInfo(goal)
 		for i in range(field_info.num_boosts):
-			boost = BoostInfo(field_info.boost_pads[i])
+			boost = BoostInfo(field_info.boost_pads[i], i)
 			self.boosts.append(boost)
 			if boost.is_full_boost:
 				self.full_boosts.append(boost)
