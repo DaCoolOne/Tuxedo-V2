@@ -113,8 +113,9 @@ class Beetle(BaseAgent):
 			hit = Hit_Prediction(self, self.packet)
 			touch1 = hit.get_earliest_touch(self, self.packet, my_car, 120, my_goal.direction * -30)
 			touch2 = hit.get_earliest_touch(self, self.packet, my_car, 180, my_goal.direction * -40)
+			touch3 = hit.get_earliest_touch(self, self.packet, my_car)
 			
-			self.hit_package = Hit_Package(hit.get_simple(), touch1, touch2, Touch())
+			self.hit_package = Hit_Package(hit.get_simple(), touch1, touch2, touch3)
 		
 		if not self.maneuver_complete:
 			self.maneuver_complete = self.maneuver.update(self, self.packet)
@@ -130,6 +131,10 @@ class Beetle(BaseAgent):
 			if touch.time > hit.hit_time - 0.25:
 				self.touch_type = TouchType.flip
 				touch = self.hit_package.flip_touch
+			
+			if self.hit_package.air_touch.time < touch.time - 0.4 and self.hit_package.air_touch.is_garunteed: # and not touch.is_garunteed:
+				self.touch_type = TouchType.aerial
+				touch = self.hit_package.air_touch
 			
 			self.hit = hit
 			self.touch = touch

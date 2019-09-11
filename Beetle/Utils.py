@@ -469,7 +469,7 @@ class Hit_Prediction():
 				t = slice.game_seconds - current_time
 				if loc.z > 200:
 					air_hit = self.calc_air(car, loc, t, packet.game_info.world_gravity_z)
-					if (air_hit.velocity.length() < 850 and t < car.boost * (1/33)):
+					if (air_hit.velocity.length() < 1000 and t < car.boost * (1/33)):
 						self.hit_time = slice.game_seconds - current_time
 						self.hit_game_seconds = slice.game_seconds
 						self.hit_position = loc
@@ -533,7 +533,7 @@ class Hit_Prediction():
 			t = slice.game_seconds - current_time
 			if loc.z > 200:
 				air_hit = self.calc_air(car, loc, slice.game_seconds - current_time, packet.game_info.world_gravity_z)
-				if (air_hit.velocity.length() < 850 and t < car.boost * 0.033 and loc.z < max_height) or i >= self.prediction.num_slices - 3 or abs(loc.y) > 5120:
+				if (air_hit.velocity.length() < 1000 and t < car.boost * 0.033 and loc.z < max_height) or i >= self.prediction.num_slices - 3 or abs(loc.y) > 5120:
 					return Touch(t, loc, t <= self.hit_time, abs(loc.y) < 5120)
 			else:
 				#car_strike_loc = get_car_strike_loc(loc, packet, car)
