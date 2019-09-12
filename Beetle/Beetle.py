@@ -57,10 +57,13 @@ class Beetle(BaseAgent):
 		self.touch = None
 		self.field_info = FieldInfo(self, self.get_field_info())
 		self.hit_package = None
+		self.hitbox = None
 		# self.communication_queue = 
 	
 	def Preprocessing(self, gtp: GameTickPacket):
 		self.packet = Packet(gtp)
+		if self.hitbox == None:
+			self.hitbox = Hitbox(gtp.game_cars[self.index].hitbox)
 		self.ball_prediction = BallPrediction(self.get_ball_prediction_struct())
 		
 		self.delta = self.packet.game_info.seconds_elapsed - self.p_time
@@ -111,7 +114,7 @@ class Beetle(BaseAgent):
 		else:
 			hit = Hit_Prediction(self, self.packet)
 			touch1 = hit.get_earliest_touch(self, self.packet, my_car, 120, my_goal.direction * -30)
-			touch2 = hit.get_earliest_touch(self, self.packet, my_car, 180, my_goal.direction * -40)
+			touch2 = hit.get_earliest_touch(self, self.packet, my_car, 265, my_goal.direction * -40)
 			touch3 = hit.get_earliest_touch(self, self.packet, my_car)
 			
 			self.hit_package = Hit_Package(hit.get_simple(), touch1, touch2, touch3)

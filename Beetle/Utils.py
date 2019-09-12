@@ -117,6 +117,9 @@ class Vec2:
 	
 	def angle(self):
 		return math.atan2(self.y, self.x)
+
+def Vec3_from_Vector3(vec):
+	return Vec3(vec.x,vec.y,vec.z)
 	
 
 class Ray2D:
@@ -580,6 +583,11 @@ def delta_v(phys, position, time, grav_z, car_vel = None):
 		(position.y - car_vel.y * time - car_pos.y) / (0.5 * time * time),
 		(position.z - car_vel.z * time - car_pos.z) / (0.5 * time * time) - grav_z,
 	)
+
+def grounded_and_wall_check(agent,packet):
+	my_car = packet.game_cars[agent.index]
+	return my_car.has_wheel_contact,my_car.physics.location.z >=50
+
 
 def impulse_velocity(packet, phys, point, time):
 	phys_pos = phys.location

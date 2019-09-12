@@ -95,6 +95,7 @@ class Hitbox():
 		self.width = _list.width
 		self.height = _list.height
 
+
 	def get_offset_by_angle(self,angleDegrees):
 		if abs(angleDegrees) <=45:
 			return self.length*.666
