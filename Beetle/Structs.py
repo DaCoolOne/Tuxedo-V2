@@ -111,6 +111,13 @@ class Physics():
 		self.angular_velocity = Vec3.cast(physics.angular_velocity)
 	
 
+class Psuedo_Physics():
+	def __init__(self, location = None, velocity = None, rotation = None, angular_velocity = None):
+		self.location = location
+		self.velocity = velocity
+		self.rotation = rotation
+		self.angular_velocity = angular_velocity
+
 class LatestTouch():
 	def __init__(self, touch):
 		self.player_index = touch.player_index

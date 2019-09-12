@@ -15,12 +15,12 @@ class Recovery(State):
 		self.prev_state = prev_state
 	def output(self, agent, packet):
 		Align_Car_To(agent, packet, packet.game_cars[agent.index].physics.velocity.flatten(), Vec3(0, 0, 1))
-		
+		agent.controller_state.throttle = 1
 		# Experimental
-		touch = agent.touch
-		if agent.touch_type == TouchType.aerial and touch.is_garunteed and not packet.game_cars[agent.index].has_wheel_contact:
-			agent.maneuver_complete = False
-			agent.maneuver = Maneuver_Aerial(agent, packet, touch.time + 0.2)
+		# touch = agent.touch
+		# if agent.touch_type == TouchType.aerial and touch.is_garunteed and not packet.game_cars[agent.index].has_wheel_contact:
+			# agent.maneuver_complete = False
+			# agent.maneuver = Maneuver_Aerial(agent, packet, touch.time + 0.2)
 			# agent, packet, time, offset = None
 		
 		return self.prev_state if packet.game_cars[agent.index].has_wheel_contact else self
@@ -88,13 +88,14 @@ class Defend(State):
 		elif (d_p_v < math.pi * 0.4 and d_p_v_2 < math.pi * 0.3 and touch.time < hit.hit_time - 0.5 and b_g_o_len < 6000):
 			return Take_Shot()
 		# For testing puposes only for now. Want to test aerials.
-		elif agent.touch_type == TouchType.aerial and touch.is_garunteed and touch.time > 0.5 and touch.location.z > 300:
+		elif agent.touch_type == TouchType.aerial and touch.is_garunteed and touch.time > 1 and touch.location.z > 300:
 			if my_goal.direction.dot(my_car.physics.location - touch.location) > 0.0:
-				return Align_For_Aerial(agent, packet, touch.time, my_goal.direction * -100 + sign(my_car.physics.location.x - touch.location.x) * 40)
+				return Align_For_Aerial(agent, packet, touch.time, my_goal.direction * -90 + Vec3(sign(my_car.physics.location.x - touch.location.x) * 40, 0, -80))
 			else:
-				return Align_For_Aerial(agent, packet, touch.time, my_goal.direction * -130)
+				return Align_For_Aerial(agent, packet, touch.time, my_goal.direction * -100 + Vec3(0, 0, 80))
 		elif bTOGT == -1 and sign(packet.game_ball.physics.velocity.y) == sign(my_goal.direction.y) and b_g_len > 6000 and abs(packet.game_ball.physics.velocity.y) > 100:
-			return Defend()
+			# return Defend()
+			self.carry_timer = 0
 		elif my_car.boost < 70 and touch.time > 1 and pad_grab_time < (hit.hit_time + (hit.hit_position - my_goal.location).length() / max(1, hit.hit_velocity * 1.5)):
 			return Grab_Boost()
 		else:
@@ -186,7 +187,7 @@ class Take_Shot(State):
 		
 		if d_p_v > math.pi * 0.5 or d_p_v_2 > math.pi * 0.4 or b_g_o_len > 6000 or not touch.is_garunteed:
 			return Defend()
-		elif agent.touch_type == TouchType.aerial and touch.time > 0.5 and touch.location.z > 300:
+		elif agent.touch_type == TouchType.aerial and touch.time > 1 and touch.location.z > 300:
 			return Align_For_Aerial(agent, packet, touch.time, (touch.location - agent.field_info.opponent_goal.location.flatten()).normal(130))
 		
 
@@ -224,18 +225,20 @@ class Align_For_Aerial(State):
 		
 		car = packet.game_cars[agent.index]
 		location = Get_Ball_At_T(packet, agent.ball_prediction, self.time).physics.location
-		dv = delta_v(car, location + self.offset, self.time, packet.game_info.world_gravity_z)
+		dv = delta_v(car.physics, location + self.offset, self.time, packet.game_info.world_gravity_z)
 		
-		agent.controller_state = drive(agent, packet, car.physics.location + dv, 1.6)
+		impulse = impulse_velocity(packet, car.physics, location, self.time)
+		
+		agent.controller_state = drive(agent, packet, car.physics.location + impulse, 2)
 		
 		# Set up for aerial and recovery.
-		if dv.flatten().normal().dot(Vec3(1, 0, 0).align_to(car.physics.rotation)) > 0.9:
+		if impulse.flatten().normal().dot(Vec3(1, 0, 0).align_to(car.physics.rotation)) > 0.9:
 			agent.maneuver = Aerial_Takeoff(agent, packet, self)
 			agent.maneuver_complete = False
 			return Defend()
 		
 		# Abort conditions
-		if self.time < 0.45 or location.z < 300:
+		if self.time < 0.9 or location.z < 300:
 			return Defend()
 		
 	

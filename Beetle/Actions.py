@@ -345,7 +345,7 @@ def drive(agent, packet, target_loc, time_allotted, target_v=-1, min_straight_sp
 	
 	cs = MyControllerState()
 	cs.steer = steer_for_heading_err(heading_err)
-	cs.handbrake = car_v.length() > 500 and (max_turn > arc_turn.radius or (arc_turn.arc_length / car_v.length() > time_allotted and heading_err_deg_abs > 60) and time_allotted > 0.2) and on_ground
+	cs.handbrake = car_v.length() > 500 and (max_turn > arc_turn.radius or (arc_turn.arc_length / car_v.length() > time_allotted and heading_err_deg_abs > 60) and time_allotted > 0.2) and on_ground and car_v.dot(car_dir) > 0
 	
 	if target_speed < min_straight_spd and heading_err_deg_abs < 10:
 		cs.throttle = 0.0
@@ -358,7 +358,7 @@ def drive(agent, packet, target_loc, time_allotted, target_v=-1, min_straight_sp
 		cs.boost = False
 	else: # <0
 		cs.throttle = 1 #constrain(-speed_err * 0.01 - 0.1)
-		should_boost = current_speed < 2300 and (always_boost or speed_err < (-500 / max(0.05, time_allotted)) or (current_speed > 1410 and speed_err < -1))
+		should_boost = current_speed < 2275 and (always_boost or speed_err < (-500 / max(0.05, time_allotted)) or (current_speed > 1410 and speed_err < -1))
 		cs.boost = should_boost and not cs.handbrake
 	
 	dist_until_brake = car_to_loc.length() - brake_dist(car_v.length(), target_v) - (2.0 * car_v.length() * (1.0 / 60.0))
@@ -611,9 +611,10 @@ class Kickoff():
 		
 	
 
-
 class Aerial_Takeoff(Maneuver):
 	def __init__(self, agent, packet, aerial_class):
+		
+		self.valid = True
 		
 		self.target_time = aerial_class.time
 		self.offset = aerial_class.offset
@@ -622,57 +623,94 @@ class Aerial_Takeoff(Maneuver):
 		location = Get_Ball_At_T(packet, agent.ball_prediction, self.target_time).physics.location
 		
 		car_face = Vec3(1, 0, 0).align_to(car.physics.rotation)
+		car_up = Vec3(0, 0, 1).align_to(car.physics.rotation)
 		
 		# Calculate the appropriate takeoff type to minimize delta v
 		
-		target_dv = 900
+		target_dv = 800
 		
-		# Will determine actual values experimentally later. For now, some rough estimates
-		dv_single = delta_v(car, location + self.offset, self.target_time, packet.game_info.world_gravity_z, \
-			car.physics.velocity + Vec3(0, 0, 200))
-		dv_s_len = abs(target_dv - dv_single.length())
+		# MATH IS FUN
+		takeoff_quick = Psuedo_Physics(car.physics.location, car.physics.velocity + car_up * 300)
+		takeoff_single = project_future(
+			Psuedo_Physics(car.physics.location, car.physics.velocity + car_up * 300), 0.2, car_up * 1400
+		)
+		takeoff_fast_single = project_future(
+			Psuedo_Physics(car.physics.location, car.physics.velocity + car_up * 300), 0.2, car_up * 1400 + car_face * 1000
+		)
+		takeoff_double = project_future(
+			project_future(
+				Psuedo_Physics(car.physics.location, car.physics.velocity + car_up * 300), 0.2, car_up * 1400
+			),
+			0.1
+		)
+		takeoff_double.velocity += car_up * 300
 		
-		dv_fast_single = delta_v(car, location + self.offset, self.target_time, packet.game_info.world_gravity_z, \
-			car.physics.velocity + Vec3(0, 0, 250) + car_face * 200)
-		dv_sf_len = abs(target_dv - dv_fast_single.length())
+		takeoff_fast_double = project_future(
+			project_future(
+				Psuedo_Physics(car.physics.location, car.physics.velocity + car_up * 300), 0.2, car_up * 1400 + car_face * 1000
+			),
+			0.1, car_face * 1000
+		)
+		takeoff_fast_double.velocity += car_up * 300
 		
-		dv_double = delta_v(car, location + self.offset, self.target_time, packet.game_info.world_gravity_z, \
-			car.physics.velocity + Vec3(0, 0, 400))
-		dv_d_len = abs(target_dv - dv_double.length())
+		dv_quick = delta_v(takeoff_quick, location + self.offset, self.target_time, packet.game_info.world_gravity_z)
+		dv_quick_len = dv_quick.length()
 		
-		dv_fast_double = delta_v(car, location + self.offset, self.target_time, packet.game_info.world_gravity_z, \
-			car.physics.velocity + Vec3(0, 0, 500) + car_face * 300)
-		dv_df_len = abs(target_dv - dv_fast_double.length())
+		dv_single = delta_v(takeoff_single, location + self.offset, self.target_time, packet.game_info.world_gravity_z)
+		dv_s_len = dv_single.length()
+		
+		dv_fast_single = delta_v(takeoff_fast_single, location + self.offset, self.target_time, packet.game_info.world_gravity_z)
+		dv_sf_len = dv_fast_single.length()
+		
+		dv_double = delta_v(takeoff_double, location + self.offset, self.target_time, packet.game_info.world_gravity_z)
+		dv_d_len = dv_double.length()
+		
+		dv_fast_double = delta_v(takeoff_fast_double, location + self.offset, self.target_time, packet.game_info.world_gravity_z)
+		dv_df_len = dv_fast_double.length()
 		
 		self.start_time = packet.game_info.seconds_elapsed
 		
 		# Should help with takeoff
 		agent.controller_state.steer = 0
 		
-		min_dv = min(min(dv_s_len, dv_sf_len),min(dv_d_len,dv_df_len))
+		# min_dv = min(dv_s_len, dv_sf_len,dv_d_len,dv_df_len,dv_quick_len)
 		
-		if dv_s_len == min_dv:
+		# Single tap jump button for one frame
+		self.quick = False
+		
+		if dv_quick_len < target_dv and dv_quick.dot(car_face) > 0:
+			self.approx_dv = dv_quick
+			self.quick = True
+			self.double_jump = False
+			self.use_boost = False
+			
+		elif dv_s_len < target_dv and dv_single.dot(car_face) > 0:
 			self.approx_dv = dv_single
 			self.double_jump = False
 			self.use_boost = True
 			
-		elif dv_sf_len == min_dv:
+		elif dv_sf_len < target_dv and dv_fast_single.dot(car_face) > 0:
 			self.approx_dv = dv_fast_single
 			self.double_jump = False
 			self.use_boost = True
 			
-		elif dv_d_len == min_dv:
+		elif dv_d_len < target_dv and dv_double.dot(car_face) > 0:
 			self.approx_dv = dv_double
 			self.double_jump = True
 			self.use_boost = False
 			
-		else:
+		elif dv_df_len < target_dv and dv_fast_double.dot(car_face) > 0:
 			self.approx_dv = dv_fast_double
 			self.double_jump = True
 			self.use_boost = True
+		else:
+			self.valid = False
 		
 	
 	def update(self, agent, packet):
+		
+		if not self.valid:
+			return True
 		
 		# Align to aerial at the ball.
 		Align_Car_To(agent, packet, self.approx_dv)
@@ -683,7 +721,7 @@ class Aerial_Takeoff(Maneuver):
 		agent.controller_state.jump = dt < 0.2
 		agent.controller_state.boost = self.use_boost
 		
-		if dt > (0.3 if self.double_jump else 0.2):
+		if dt > (0.3 if self.double_jump else 0.2) or self.quick:
 			if self.double_jump:
 				agent.controller_state.jump = True
 				agent.controller_state.pitch = 0
@@ -701,7 +739,6 @@ class Maneuver_Aerial(Maneuver):
 		self.offset = Vec3() if offset is None else offset
 		self.delta_t = time
 		self.elapsed_time = 0
-		self.h_jump = False
 		# Calculate the delta v length to determine how often to boost. We want to keep this value relatively consistent.
 		self.dv_l = self.get_dv(agent, packet).length()
 	
@@ -726,12 +763,12 @@ class Maneuver_Aerial(Maneuver):
 		render_star(agent, ball.physics.location, agent.renderer.red())
 		
 		# Cancel aerial if the delta v goes to insane heights or if we have hit the location.
-		return self.delta_t < 0 or (dv.length() > 2000 and self.delta_t > 0.5) or my_car.has_wheel_contact
+		return self.delta_t < 0 or (dv.length() > 2000 and self.delta_t > 0.5) or (my_car.has_wheel_contact and self.elapsed_time > 0.1)
 	
 	def get_dv(self, agent, packet):
 		my_car = packet.game_cars[agent.index]
 		ball = Get_Ball_At_T(packet, agent.ball_prediction, self.delta_t)
-		return delta_v(my_car, ball.physics.location + self.offset, self.delta_t, packet.game_info.world_gravity_z)
+		return delta_v(my_car.physics, ball.physics.location + self.offset, self.delta_t, packet.game_info.world_gravity_z)
 	
 
 

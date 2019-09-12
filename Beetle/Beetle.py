@@ -13,7 +13,7 @@ from Actions import *
 from States import *
 
 # Turn off in order fix hot reloads
-USE_HELPER_PROCESS = True
+USE_HELPER_PROCESS = False
 
 hit_prediction_queues = {}
 hit_prediction_managers = {}

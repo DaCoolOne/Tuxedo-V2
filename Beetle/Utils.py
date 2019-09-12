@@ -44,6 +44,15 @@ def correct(target, val, mult = 1):
 	rad = constrain_pi(target - val)
 	return (rad * mult)
 
+# Projects into the future given a time, acceleration, and initial physics.
+def project_future(phys, t, a = None):
+	if a is None:
+		a = Vec3()
+	return Psuedo_Physics(
+		velocity = a * t + phys.velocity,
+		location = a * (t * t) + phys.velocity * t + phys.location
+	)
+
 # Thank you RLBot wiki! :D
 def turn_radius(v):
 	if v == 0:
@@ -64,7 +73,6 @@ def curvature(v):
 		return 0.001800 - 0.40e-6 * v
 	else:
 		return 0.0
-
 
 # Turning stuff
 class Vec2:
@@ -470,10 +478,12 @@ class Hit_Prediction():
 				if loc.z > 200:
 					air_hit = self.calc_air(car, loc, t, packet.game_info.world_gravity_z)
 					if (air_hit.velocity.length() < 1000 and t < car.boost * (1/33)):
-						self.hit_time = slice.game_seconds - current_time
-						self.hit_game_seconds = slice.game_seconds
-						self.hit_position = loc
-						self.hit_velocity = car.physics.velocity.length() + 600
+						# Add a maximum velocity check
+						if project_future(car.physics, t, air_hit.velocity).velocity.length() < 2300:
+							self.hit_time = slice.game_seconds - current_time
+							self.hit_game_seconds = slice.game_seconds
+							self.hit_position = loc
+							self.hit_velocity = car.physics.velocity.length() + 600
 				else:
 					hit = calc_hit(car, loc)
 					if hit.time < slice.game_seconds - current_time:
@@ -504,7 +514,7 @@ class Hit_Prediction():
 	
 	# Designed for aerials. Calculates the delta v to hit a location at a time.
 	def calc_air(self, car, position, time, grav_z):
-		dv = delta_v(car, position, max(0.0001, time), grav_z, car.physics.velocity + Vec3(0, 0, 300 if car.has_wheel_contact else 0).align_to(car.physics.rotation))
+		dv = delta_v(car.physics, position, max(0.0001, time), grav_z, car.physics.velocity + Vec3(0, 0, 300 if car.has_wheel_contact else 0).align_to(car.physics.rotation))
 		
 		return Hit(velocity = dv)
 	
@@ -561,15 +571,29 @@ def render_star(self, position: Vec3, color, size = 100):
 	self.renderer.draw_line_3d((position - Vec3(v.x, v.y, -v.z)).UI_Vec3(), (position + Vec3(v.x, v.y, -v.z)).UI_Vec3(), color)
 	
 
-def delta_v(car, position, time, grav_z, car_vel = None):
+def delta_v(phys, position, time, grav_z, car_vel = None):
 	if not car_vel:
-		car_vel = car.physics.velocity
-	car_pos = car.physics.location
+		car_vel = phys.velocity
+	car_pos = phys.location
 	return Vec3(
 		(position.x - car_vel.x * time - car_pos.x) / (0.5 * time * time),
 		(position.y - car_vel.y * time - car_pos.y) / (0.5 * time * time),
 		(position.z - car_vel.z * time - car_pos.z) / (0.5 * time * time) - grav_z,
 	)
+
+def impulse_velocity(packet, phys, point, time):
+	phys_pos = phys.location
+	
+	phys_to_ball = point - phys_pos
+	
+	impulse_2D = phys_to_ball.flatten()
+	
+	impulse_2D *= (1 / max(0.0001, time))
+	
+	# Worked this out a while ago
+	z_vel = -(0.5 * packet.game_info.world_gravity_z * time * time - phys_to_ball.z) / max(0.0001, time)
+	
+	return Vec3(impulse_2D.x, impulse_2D.y, z_vel)
 
 # Works decently to steer on ground
 def steer_for_heading_err(headingErrRad):
@@ -600,7 +624,6 @@ def team_mult(team):
 		return 1.0
 	else: # 0==Blue
 		return -1.0
-
 
 def accel_at_spd(s): # Acceleration from throttle=1 at speed s (scales linearly with throttle)
 	if s == 0:
