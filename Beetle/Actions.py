@@ -255,6 +255,8 @@ def Align_Car_To(self, packet, vector: Vec3, up = Vec3(0, 0, 0)):
 	self.controller_state.steer = constrain(yaw)
 
 def drive(agent, packet, target_loc, time_allotted, target_v=-1, min_straight_spd=0, always_boost=False, allow_flips=False):
+	target_loc = target_loc.copy()
+	
 	car = packet.game_cars[agent.index]
 	car_p = car.physics.location # Car position
 	car_v = car.physics.velocity.flatten() # Car velocity

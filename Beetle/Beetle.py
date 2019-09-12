@@ -35,7 +35,6 @@ class Beetle(BaseAgent):
 	
 	def initialize_agent(self):
 		self.packet = None
-		self.field_info = None
 		self.controller_state = None
 		self.flip_timer = 0
 		self.flipping = False
@@ -100,6 +99,9 @@ class Beetle(BaseAgent):
 		self.controller_state = MyControllerState()
 		
 		my_goal = self.field_info.my_goal
+		
+		for boost in self.field_info.full_boosts:
+			render_star(self, boost.location, self.renderer.yellow(), 200)
 		
 		if USE_HELPER_PROCESS:
 			# Wait for hit to be created if we haven't created a hit package yet
