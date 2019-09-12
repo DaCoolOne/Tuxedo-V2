@@ -100,9 +100,6 @@ class Beetle(BaseAgent):
 		
 		my_goal = self.field_info.my_goal
 		
-		for boost in self.field_info.full_boosts:
-			render_star(self, boost.location, self.renderer.yellow(), 200)
-		
 		if USE_HELPER_PROCESS:
 			# Wait for hit to be created if we haven't created a hit package yet
 			while self.hit_package is None and self.hit_prediction_queue.empty():

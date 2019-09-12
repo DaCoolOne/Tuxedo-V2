@@ -75,6 +75,7 @@ class Hit_Predictor(BotHelperProcess):
 			hit = Hit_Prediction(self, self.packet)
 			touch1 = hit.get_earliest_touch(self, self.packet, my_car, 120, my_goal.direction * -30)
 			touch2 = hit.get_earliest_touch(self, self.packet, my_car, 180, my_goal.direction * -40)
+			touch3 = hit.get_earliest_touch(self, self.packet, my_car)
 			
 			self.hit_prediction_queue.put_nowait(Hit_Package(hit.get_simple(), touch1, touch2, Touch()).to_list())
 		
