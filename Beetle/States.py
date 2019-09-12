@@ -76,8 +76,6 @@ class Defend(State):
 		
 		c_boost = get_corner_boost_index(agent)
 		
-		pad_grab_time = calc_hit(my_car, agent.field_info.full_boosts[c_boost].location).time + Time_to_Pos((agent.field_info.full_boosts[c_boost].location - my_goal.location).length(), 0, 100).time if c_boost >= 0 else 10000
-		
 		# We keep our own dribble timer in order to be more restrictive than the dribble tracker.
 		if abs(160 - ball.location.z) < 30 and (ball.location - my_car.physics.location).length() < 200:
 			self.carry_timer += agent.delta
@@ -89,13 +87,10 @@ class Defend(State):
 			return Take_Shot()
 		# For testing puposes only for now. Want to test aerials.
 		elif agent.touch_type == TouchType.aerial and touch.is_garunteed and touch.time > 0.5 and touch.location.z > 300:
-			if my_goal.direction.dot(my_car.physics.location - touch.location) > 0.0:
-				return Align_For_Aerial(agent, packet, touch.time, my_goal.direction * -100 + sign(my_car.physics.location.x - touch.location.x) * 40)
-			else:
-				return Align_For_Aerial(agent, packet, touch.time, my_goal.direction * -130)
+			return Align_For_Aerial(agent, packet, touch.time, my_goal.direction * -130)
 		elif bTOGT == -1 and sign(packet.game_ball.physics.velocity.y) == sign(my_goal.direction.y) and b_g_len > 6000 and abs(packet.game_ball.physics.velocity.y) > 100:
 			return Defend()
-		elif my_car.boost < 70 and touch.time > 1 and pad_grab_time < (hit.hit_time + (hit.hit_position - my_goal.location).length() / max(1, hit.hit_velocity * 1.5)):
+		elif ((touch.time > 2 and hit.hit_time > 3) and my_car.boost < 70 and c_boost >= 0):
 			return Grab_Boost()
 		else:
 			self.carry_timer = 0
@@ -202,9 +197,7 @@ class Grab_Boost(State):
 		# Collect a boost pad
 		agent.controller_state = drive(agent, packet, agent.field_info.full_boosts[c_boost].location, 0.1, 0, allow_flips = True)
 		
-		render_star(agent, agent.field_info.full_boosts[c_boost].location, agent.renderer.yellow())
-		
-		if my_car.boost > 90:
+		if my_car.boost > 90 or agent.hit.hit_time < 0.5:
 			return Defend()
 	
 

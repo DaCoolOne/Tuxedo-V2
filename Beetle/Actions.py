@@ -137,6 +137,63 @@ class Maneuver_Flip_Ball(Maneuver):
 			return dt > self.max_time
 		return False
 
+
+class Maneuver_Jump_Shot(Maneuver):
+	def __init__(self, agent, packet, intersect_time,target):
+		self.start_time = packet.game_info.seconds_elapsed
+		self.target = target
+		#clamp(val, lower, upper)
+		self.delay = clamp(intersect_time, .3, 1.25)
+		if delay >= .3:
+			if height <= 200:
+				self.jumpTimerMax = .1
+				self.angleTimer = clamp(.15, .05, self.jumpTimerMax / 4)
+			else:
+				self.jumpTimerMax = delay - .2
+				self.angleTimer = clamp(.15, .1, self.jumpTimerMax / 4)
+		self.jumped = False
+		self.jumpTimer = 0
+
+	def update(self,agent, packet):
+		age = packet.game_info.seconds_elapsed - self.start_time
+		controller_state = agent.controller_state
+		controller_state.throttle = 1
+		car = packet.game_cars[agent.index]
+		position = Vec3(car.physics.location.x,car.physics.location.y,car.physics.location.z)
+		if not self.jumped:
+			self.jumped = True
+			controller_state.jump = True
+		else:
+			jumpTimer = age
+
+			if jumpTimer < self.angleTimer:
+				Align_Car_To(agent, packet,(position-self.target).normal)
+
+			if jumpTimer < self.jumpTimerMax:
+				controller_state.jump = True
+
+			else:
+				controller_state.jump = False
+
+				if jumpTimer > self.jumpTimerMax:
+					if jumpTimer >= self.delay - .2 and self.jumpTimer < self.delay - .15:
+						controller_state.jump = False
+					elif jumpTimer >= self.delay - .15 and jumpTimer < self.delay:
+						vec = self.target - my_car.physics.location
+						#vec = vec + packet.game_ball.physics.velocity.normal(vec.length() * 0.5)
+						direction = vec.align_from(my_car.physics.rotation).flatten().normal()
+						agent.controller_state.jump = True
+						agent.controller_state.pitch = -direction.x
+						agent.controller_state.roll = direction.y
+					elif jumpTimer < self.delay + .1:
+						controller_state.jump = False
+					else:
+						controller_state.jump = False
+						return False
+		return True
+
+
+
 class Maneuver_Flick(Maneuver):
 	def __init__(self, packet, direction, time = 0.8):
 		self.direction = direction
@@ -255,8 +312,6 @@ def Align_Car_To(self, packet, vector: Vec3, up = Vec3(0, 0, 0)):
 	self.controller_state.steer = constrain(yaw)
 
 def drive(agent, packet, target_loc, time_allotted, target_v=-1, min_straight_spd=0, always_boost=False, allow_flips=False):
-	target_loc = target_loc.copy()
-	
 	car = packet.game_cars[agent.index]
 	car_p = car.physics.location # Car position
 	car_v = car.physics.velocity.flatten() # Car velocity
