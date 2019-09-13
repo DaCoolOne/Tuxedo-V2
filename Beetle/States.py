@@ -42,34 +42,35 @@ class Jumpshot_Handler(State):
 		rotator = Rotation(my_car.physics.rotation)
 		car_location = Vec3_from_Vector3(my_car.physics.location)
 		grounded,on_wall = grounded_and_wall_check(agent,packet)
+		targetDistance = abs((car_location- touch.location).length())
 		shot_limit = 1
 		
 		ball_offset = 93
 		angle = abs(math.degrees(rotator.angle_to_vec(touch.location.flatten())))
 		car_offset = agent.hitbox.get_offset_by_angle(angle)
 		total_offset = car_offset+ball_offset
+
 		
-		if not perfect_world:
-			total_offset*=.75
+		# if not perfect_world:
+		# 	total_offset*=.75
 		
-		if (car_location- myGoal).length() < 2500:
+		if abs((car_location- myGoal).length()) < 2500:
 			direction = (touch.location.flatten() - myGoal.flatten()).normal()
-			ideal_position = touch.location+direction*total_offset
+			ideal_position = touch.location-(direction*total_offset)
 		else:
 			direction = (enemyGoal.flatten() - touch.location.flatten()).normal()
-			ideal_position = touch.location + direction * total_offset
+			ideal_position = touch.location - (direction * total_offset)
 		
-		time_remaining = touch.time - packet.game_info.seconds_elapsed
+
 		agent.controller_state = drive(agent, packet, ideal_position.flatten(),touch.time)
-		
 		if grounded and not on_wall:
 			futurePos = car_location + Vec3_from_Vector3(my_car.physics.velocity)*agent.delta
-			if time_remaining < shot_limit:
-				speed = clamp(Vec3_from_Vector3(my_car.physics.velocity).length(),0.001,2300)
-				if speed * time_remaining >= clamp((ideal_position - direction*total_offset).length(),0,99999):
+			if touch.time < shot_limit:
+				speed = clamp(abs(Vec3_from_Vector3(my_car.physics.velocity).length()),0.001,2300)
+				#if speed * time_remaining >= total_offset*.75:
+				if speed * touch.time >= clamp(targetDistance -total_offset,0,99999):
 					agent.maneuver = Maneuver_Jump_Shot(agent, packet, touch.time, touch.location)
 					agent.maneuver_complete = False
-					print("initiating jumpshot!")
 					return Defend()
 		
 

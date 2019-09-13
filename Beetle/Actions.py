@@ -141,15 +141,14 @@ class Maneuver_Jump_Shot(Maneuver):
 	def __init__(self, agent, packet, intersect_time, target):
 		self.start_time = packet.game_info.seconds_elapsed
 		self.target = target
-		#clamp(val, lower, upper)
 		self.delay = clamp(intersect_time, 0.3, 1.25)
-		if delay >= 0.3:
-			if height <= 200:
+		if self.delay >= 0.3:
+			if target.z <= 200:
 				self.jumpTimerMax = 0.1
-				self.angleTimer = clamp(0.15, 0.05, self.jumpTimerMax / 4)
+				self.angleTimer = clamp(self.jumpTimerMax / 4,0.05,0.15)
 			else:
-				self.jumpTimerMax = delay - 0.2
-				self.angleTimer = clamp(0.15, 0.1, self.jumpTimerMax / 4)
+				self.jumpTimerMax = self.delay - 0.2
+				self.angleTimer = clamp(self.jumpTimerMax / 4, 0.1, 0.15)
 		self.jumped = False
 		self.jumpTimer = 0
 
@@ -157,39 +156,37 @@ class Maneuver_Jump_Shot(Maneuver):
 		age = packet.game_info.seconds_elapsed - self.start_time
 		controller_state = agent.controller_state
 		controller_state.throttle = 1
+		controller_state.boost = False
 		car = packet.game_cars[agent.index]
-		position = Vec3(car.physics.location.x,car.physics.location.y,car.physics.location.z)
+		position = Vec3_from_Vector3(car.physics.location)
 		if not self.jumped:
 			self.jumped = True
 			controller_state.jump = True
 		else:
-			jumpTimer = age
+			#jumpTimer = age
 
-			if jumpTimer < self.angleTimer:
-				Align_Car_To(agent, packet,(position-self.target).normal)
+			if age < self.angleTimer:
+				Align_Car_To(agent, packet,(position-self.target).normal())
 
-			if jumpTimer < self.jumpTimerMax:
+			if age < self.jumpTimerMax:
 				controller_state.jump = True
 
 			else:
-				controller_state.jump = False
-
-				if jumpTimer > self.jumpTimerMax:
-					if jumpTimer >= self.delay - 0.2 and self.jumpTimer < self.delay - 0.15:
+				if age >= self.jumpTimerMax:
+					if age >= self.delay - 0.2 and age < self.delay - 0.15:
 						controller_state.jump = False
-					elif jumpTimer >= self.delay - 0.15 and jumpTimer < self.delay:
-						vec = self.target - my_car.physics.location
-						#vec = vec + packet.game_ball.physics.velocity.normal(vec.length() * 0.5)
-						direction = vec.align_from(my_car.physics.rotation).flatten().normal()
+					elif age >= self.delay - 0.15 and age < self.delay:
+						vec = self.target - car.physics.location
+						direction = vec.align_from(car.physics.rotation).normal()
 						agent.controller_state.jump = True
 						agent.controller_state.pitch = -direction.x
 						agent.controller_state.roll = direction.y
-					elif jumpTimer < self.delay + 0.1:
+					elif age < self.delay + 0.1:
 						controller_state.jump = False
 					else:
 						controller_state.jump = False
-						return False
-		return True
+						return True
+		return False
 
 class Maneuver_Flick(Maneuver):
 	def __init__(self, packet, direction, time = 0.8):
