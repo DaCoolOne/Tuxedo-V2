@@ -117,6 +117,7 @@ class Vec2:
 	
 	def angle(self):
 		return math.atan2(self.y, self.x)
+	
 
 def Vec3_from_Vector3(vec):
 	return Vec3(vec.x,vec.y,vec.z)
@@ -199,6 +200,79 @@ class ArcTurn:
 				points.append(UI_Vec3(self.center.x + math.cos(angle) * self.radius, self.center.y + math.sin(angle) * self.radius, 20))
 		
 		renderer.draw_polyline_3d(points, color)
+	
+
+class Line_Arc_Line:
+	# offset represents line 1
+	def __init__(self, car, target, offset):
+		# Used to signal early aborts
+		self.valid = True
+		
+		self.start = Vec2.cast(car.physics.location)
+		self.target = Vec2.cast(target)
+		self.offset = Vec2.cast(offset)
+		self.p2 = self.target + self.offset
+		start_to_p2 = self.p2 - self.start
+		v_upper = Time_to_Pos(start_to_p2.length(), car.physics.velocity.flatten().length(), car.boost).velocity
+		
+		if v_upper <= 0:
+			self.valid = False
+			return
+		
+		self.arc_radius = turn_radius(v_upper)
+		
+		cp = self.offset.normal(self.arc_radius).rot90()
+		
+		if cp.dot(start_to_p2) < 0:
+			cp *= -1
+		
+		self.arc_center = self.p2 + cp
+		
+		start_to_c = self.arc_center - self.start
+		
+		# Add sizable epsilon
+		if start_to_c.length() <= self.arc_radius + 0.0001:
+			self.valid = False
+			return
+		
+		self.a2 = cp * -1
+		
+		offset_angle = math.acos(self.arc_radius / start_to_c.length())
+		inner_angle = math.pi - offset_angle
+		
+		ang = (start_to_c * -1).angle()
+		
+		a1 = Vec2(math.cos(ang + inner_angle), math.sin(ang + inner_angle)) * self.arc_radius
+		
+		p1_a = (self.arc_center + a1).length()
+		p1_b = (self.arc_center - a1).length()
+		
+		sc_l = start_to_c.length()
+		
+		if p1_a == p1_b:
+			al = al * (1 if a1.dot(self.offset) > 0 else -1)
+		elif p1_a > p1_b:
+			a1 = a1 * -1
+		
+		self.p1 = self.arc_center + a1
+		
+		self.arc_length = constrain_pi(self.arc_center)
+		
+	
+	def render(self, agent):
+		render_star(agent, self.start.inflate(20), agent.renderer.green(), 30)
+		render_star(agent, self.target.inflate(20), agent.renderer.green(), 30)
+		render_star(agent, self.p1.inflate(20), agent.renderer.green(), 30)
+		render_star(agent, self.p2.inflate(20), agent.renderer.green(), 30)
+		
+		render_star(agent, self.arc_center.inflate(20), agent.renderer.red(), 30)
+		
+		agent.renderer.draw_line_3d(self.arc_center.inflate(20).UI_Vec3(), self.p2.inflate(20).UI_Vec3(), self.renderer.red())
+		agent.renderer.draw_line_3d(self.arc_center.inflate(20).UI_Vec3(), self.p1.inflate(20).UI_Vec3(), self.renderer.red())
+		
+		agent.renderer.draw_line_3d(self.target.inflate(20).UI_Vec3(), self.p2.inflate(20).UI_Vec3(), self.renderer.blue())
+		agent.renderer.draw_line_3d(self.start.inflate(20).UI_Vec3(), self.p1.inflate(20).UI_Vec3(), self.renderer.blue())
+		
 	
 
 class Hit():
