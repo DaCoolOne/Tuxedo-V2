@@ -155,7 +155,7 @@ class Maneuver_Jump_Shot(Maneuver):
 	def update(self,agent, packet):
 		age = packet.game_info.seconds_elapsed - self.start_time
 		controller_state = agent.controller_state
-		controller_state.throttle = 1
+		controller_state.throttle = 0
 		controller_state.boost = False
 		car = packet.game_cars[agent.index]
 		position = Vec3_from_Vector3(car.physics.location)
