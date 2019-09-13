@@ -588,7 +588,6 @@ def grounded_and_wall_check(agent,packet):
 	my_car = packet.game_cars[agent.index]
 	return my_car.has_wheel_contact,my_car.physics.location.z >=50
 
-
 def impulse_velocity(packet, phys, point, time):
 	phys_pos = phys.location
 	
@@ -624,7 +623,6 @@ def get_heading_err(current: Vec3, ideal: Vec3) -> float:
 			diff -= 2 * math.pi
 	
 	return diff
-
 
 #Sign of y position of team net
 def team_mult(team):
@@ -680,7 +678,6 @@ def get_car_strike_loc(ball_loc, packet, car):
 	car_to_ball_2d = (ball_p - car.physics.location).flatten() # ~176 ball center to car joint at diagonal touch
 	return ball_loc - ball_to_goal.normal(100) - car_to_ball_2d.normal(84)
 
-
 def ball_loc_at_time(agent, packet, t): # Time t as seconds_elapsed, clamps to prediction bounds
 	bp = agent.ball_prediction # Ball prediction
 	t_now = packet.game_info.seconds_elapsed # Current time
@@ -693,13 +690,11 @@ def ball_loc_at_time(agent, packet, t): # Time t as seconds_elapsed, clamps to p
 			break
 	return slice.physics.location
 
-
 def get_score_total(gtp: GameTickPacket):
 	score_total = 0
 	for i in range(0, gtp.num_teams):
 		score_total += gtp.teams[i].score
 	return score_total
-
 
 # Time when |ball_loc.y| > |y|, good for finding defensive intercept
 def ball_past_y_time(agent, packet, y): # Absolute value y coords, returns -1 if |ball.y| not predicted to go above |y|

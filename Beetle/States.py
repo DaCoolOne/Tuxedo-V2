@@ -33,7 +33,7 @@ class Carry_Ball(State):
 		if agent.packet.game_ball.physics.location.z < 120 or (agent.packet.game_ball.physics.location - my_car.physics.location).length() > 200 or not my_car.has_wheel_contact:
 			return Defend()
 
-class Jumpshot_Handler():
+class Jumpshot_Handler(State):
 	def output(self,agent,packet,perfect_world = False):
 		enemyGoal = Vec3(0, 5200 * -sign(agent.team), 100)
 		myGoal = Vec3(0, 5200 * sign(agent.team), 100)
@@ -43,23 +43,25 @@ class Jumpshot_Handler():
 		car_location = Vec3_from_Vector3(my_car.physics.location)
 		grounded,on_wall = grounded_and_wall_check(agent,packet)
 		shot_limit = 1
-
+		
 		ball_offset = 93
 		angle = abs(math.degrees(rotator.angle_to_vec(touch.location.flatten())))
 		car_offset = agent.hitbox.get_offset_by_angle(angle)
 		total_offset = car_offset+ball_offset
-
+		
 		if not perfect_world:
 			total_offset*=.75
-
+		
 		if (car_location- myGoal).length() < 2500:
 			direction = (touch.location.flatten() - myGoal.flatten()).normal()
 			ideal_position = touch.location+direction*total_offset
 		else:
 			direction = (enemyGoal.flatten() - touch.location.flatten()).normal()
 			ideal_position = touch.location + direction * total_offset
-
+		
 		time_remaining = touch.time - packet.game_info.seconds_elapsed
+		agent.controller_state = drive(agent, packet, ideal_position.flatten(),touch.time)
+		
 		if grounded and not on_wall:
 			futurePos = car_location + Vec3_from_Vector3(my_car.physics.velocity)*agent.delta
 			if time_remaining < shot_limit:
@@ -68,8 +70,8 @@ class Jumpshot_Handler():
 					agent.maneuver = Maneuver_Jump_Shot(agent, packet, touch.time, touch.location)
 					agent.maneuver_complete = False
 					print("initiating jumpshot!")
-
-		return drive(agent, packet, ideal_position.flatten(),touch.time)
+					return Defend()
+		
 
 
 
@@ -104,9 +106,9 @@ class Defend(State):
 		# tried to shoehorn jumpshot in here, failed epicly
 		# if agent.touch.location.z > 120 and agent.touch.location.z <= 265:
 		# 	return Jumpshot_Handler().output(agent,packet,perfect_world = False)
-
-		if (bTOGT != -1 or (ball.location + ball.velocity.flatten() - my_goal.location).length() < 1000 or agent.touch_type != TouchType.ground) and touch.time < 0.4:
-			Flip_To_Ball(agent, packet)
+		
+		# if (bTOGT != -1 or (ball.location + ball.velocity.flatten() - my_goal.location).length() < 1000 or agent.touch_type != TouchType.ground) and touch.time < 0.4:
+			# Flip_To_Ball(agent, packet)
 		
 		b_g_o = (touch.location - agent.field_info.opponent_goal.location).flatten()
 		c_b_o = (my_car.physics.location - touch.location).flatten()
@@ -127,6 +129,8 @@ class Defend(State):
 			self.carry_timer += agent.delta
 			if self.carry_timer > 1:
 				return Carry_Ball()
+		elif agent.touch_type == TouchType.flip and touch.time < hit.hit_time and touch.time < 2:
+			return Jumpshot_Handler()
 		elif any((agent.team != car.team and car.has_dribble) for car in packet.game_cars):
 			self.carry_timer = 0
 		elif (d_p_v < math.pi * 0.4 and d_p_v_2 < math.pi * 0.3 and touch.time < hit.hit_time - 0.5 and b_g_o_len < 6000):
