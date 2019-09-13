@@ -69,7 +69,7 @@ class Jumpshot_Handler(State):
 		if grounded and not on_wall:
 			futurePos = car_location + Vec3_from_Vector3(my_car.physics.velocity)*agent.delta
 			if touch.time < shot_limit:
-				if abs((car_location-ideal_position).length()) <  abs((car_location-bad_position).length()):
+				if abs((futurePos-ideal_position).length()) <  abs((futurePos-bad_position).length()):
 					speed = clamp(abs(Vec3_from_Vector3(my_car.physics.velocity).length()),0.001,2300)
 					if speed * touch.time >= clamp(targetDistance -total_offset,0,99999):
 						agent.maneuver = Maneuver_Jump_Shot(agent, packet, touch.time, touch.location)
