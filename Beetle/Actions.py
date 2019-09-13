@@ -166,7 +166,7 @@ class Maneuver_Jump_Shot(Maneuver):
 			#jumpTimer = age
 
 			if age < self.angleTimer:
-				Align_Car_To(agent, packet,(position-self.target).normal())
+				Align_Car_To(agent, packet,(position-self.target).normal(), Vec3(0, 0, 1))
 
 			if age < self.jumpTimerMax:
 				controller_state.jump = True
