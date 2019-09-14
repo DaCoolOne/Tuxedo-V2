@@ -50,7 +50,7 @@ class Beetle(BaseAgent):
 		self.getting_boost = False
 		self.was_active = False
 		self.taking_shot = False
-		self.state = Defend()
+		self.state = Test_Drive_Goal() # Defend()
 		self.touch_type = TouchType.ground
 		self.dribble_tracker = Dribble_Tracker(self)
 		self.hit = None
@@ -74,7 +74,7 @@ class Beetle(BaseAgent):
 		if not self.was_active and self.packet.game_info.is_kickoff_pause:
 			self.maneuver = Kickoff(self, self.packet)
 			self.maneuver_complete = False
-			self.state = Defend()
+			self.state = Test_Drive_Goal() # Defend()
 		
 		self.was_active = self.packet.game_info.is_round_active
 		
@@ -97,11 +97,11 @@ class Beetle(BaseAgent):
 		
 		my_car = self.packet.game_cars[self.index]
 		
-		self.renderer.begin_rendering()
-		
 		self.controller_state = MyControllerState()
 		
 		my_goal = self.field_info.my_goal
+		
+		self.renderer.begin_rendering()
 		
 		if USE_HELPER_PROCESS:
 			# Wait for hit to be created if we haven't created a hit package yet

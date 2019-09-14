@@ -213,7 +213,9 @@ class Line_Arc_Line:
 		self.offset = Vec2.cast(offset)
 		self.p2 = self.target + self.offset
 		start_to_p2 = self.p2 - self.start
-		v_upper = Time_to_Pos(start_to_p2.length(), car.physics.velocity.flatten().length(), car.boost).velocity
+		self.vel = Time_to_Pos(start_to_p2.length(), car.physics.velocity.flatten().length(), car.boost)
+		
+		v_upper = self.vel.velocity
 		
 		if v_upper <= 0:
 			self.valid = False
@@ -223,7 +225,7 @@ class Line_Arc_Line:
 		
 		cp = self.offset.normal(self.arc_radius).rot90()
 		
-		if cp.dot(start_to_p2) < 0:
+		if cp.dot(start_to_p2) > 0:
 			cp *= -1
 		
 		self.arc_center = self.p2 + cp
@@ -243,20 +245,35 @@ class Line_Arc_Line:
 		ang = (start_to_c * -1).angle()
 		
 		a1 = Vec2(math.cos(ang + inner_angle), math.sin(ang + inner_angle)) * self.arc_radius
+		a2 = Vec2(math.cos(ang - inner_angle), math.sin(ang - inner_angle)) * self.arc_radius
 		
-		p1_a = (self.arc_center + a1).length()
-		p1_b = (self.arc_center - a1).length()
+		a1_dp = a1.dot(start_to_c)
+		a2_dp = a2.dot(start_to_c)
 		
-		sc_l = start_to_c.length()
+		p1_a = a1 * (1 if a1_dp < 0 else -1)
+		p1_b = a2 * (1 if a2_dp < 0 else -1)
 		
-		if p1_a == p1_b:
-			al = al * (1 if a1.dot(self.offset) > 0 else -1)
-		elif p1_a > p1_b:
-			a1 = a1 * -1
+		start_to_p1_a = (self.arc_center + p1_a - self.start)
+		# start_to_p1_b = (self.arc_center + p1_b - self.start)
 		
-		self.p1 = self.arc_center + a1
+		# Arc direction
+		arc_dir = sign(cp.dot(self.offset.rot90()) * -1)
 		
-		self.arc_length = constrain_pi(self.arc_center)
+		if sign(p1_a.rot90().dot(start_to_p1_a)) == arc_dir:
+			self.a1 = p1_a
+			self.p1 = self.arc_center + p1_a
+		else:
+			self.a1 = p1_b
+			self.p1 = self.arc_center + p1_b
+		
+		# self.arc_length = constrain_pi(self.arc_center)
+		
+		angle_arc = self.a1.angle_between(self.a2)
+		
+		if self.offset.dot(self.p1 - self.arc_center) > 0:
+			self.arc_length = self.arc_radius * angle_arc
+		else:
+			self.arc_length = self.arc_radius * (math.pi * 2 - angle_arc)
 		
 	
 	def render(self, agent):
@@ -265,14 +282,19 @@ class Line_Arc_Line:
 		render_star(agent, self.p1.inflate(20), agent.renderer.green(), 30)
 		render_star(agent, self.p2.inflate(20), agent.renderer.green(), 30)
 		
-		render_star(agent, self.arc_center.inflate(20), agent.renderer.red(), 30)
+		# render_star(agent, self.arc_center.inflate(20), agent.renderer.red(), 30)
 		
-		agent.renderer.draw_line_3d(self.arc_center.inflate(20).UI_Vec3(), self.p2.inflate(20).UI_Vec3(), self.renderer.red())
-		agent.renderer.draw_line_3d(self.arc_center.inflate(20).UI_Vec3(), self.p1.inflate(20).UI_Vec3(), self.renderer.red())
+		agent.renderer.draw_string_3d(self.arc_center.inflate(20).UI_Vec3(), 2, 2, str(math.floor(math.degrees(self.arc_length / self.arc_radius))), agent.renderer.yellow())
 		
-		agent.renderer.draw_line_3d(self.target.inflate(20).UI_Vec3(), self.p2.inflate(20).UI_Vec3(), self.renderer.blue())
-		agent.renderer.draw_line_3d(self.start.inflate(20).UI_Vec3(), self.p1.inflate(20).UI_Vec3(), self.renderer.blue())
+		agent.renderer.draw_line_3d(self.arc_center.inflate(20).UI_Vec3(), self.p2.inflate(20).UI_Vec3(), agent.renderer.red())
+		agent.renderer.draw_line_3d(self.arc_center.inflate(20).UI_Vec3(), self.p1.inflate(20).UI_Vec3(), agent.renderer.red())
 		
+		agent.renderer.draw_line_3d(self.target.inflate(20).UI_Vec3(), self.p2.inflate(20).UI_Vec3(), agent.renderer.blue())
+		agent.renderer.draw_line_3d(self.start.inflate(20).UI_Vec3(), self.p1.inflate(20).UI_Vec3(), agent.renderer.blue())
+		
+	
+	def calc_time(self):
+		return self.vel.time + (self.arc_length + self.offset.length()) / self.vel.velocity
 	
 
 class Hit():
@@ -660,7 +682,7 @@ def delta_v(phys, position, time, grav_z, car_vel = None):
 
 def grounded_and_wall_check(agent,packet):
 	my_car = packet.game_cars[agent.index]
-	return my_car.has_wheel_contact,my_car.physics.location.z >=50
+	return my_car.has_wheel_contact, my_car.physics.location.z >= 50
 
 def impulse_velocity(packet, phys, point, time):
 	phys_pos = phys.location

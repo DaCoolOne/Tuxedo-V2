@@ -300,5 +300,151 @@ class Align_For_Aerial(State):
 		
 	
 
+class Test_Line_Arc_Line(State):
+	
+	def __init__(self, packet, line_arc_line, execute_time = -1):
+		self.line_arc_line = line_arc_line
+		if execute_time < 0:
+			self.execute_time = line_arc_line.calc_time()
+		else:
+			self.execute_time = execute_time
+		self.stage = 0
+		self.p_time = packet.game_info.seconds_elapsed
+		self.p_car_v = 1000
+	
+	def reset(self, packet, line_arc_line, execute_time = -1):
+		self.__init__(packet, line_arc_line, execute_time)
+	
+	def output(self, agent, packet):
+		
+		delta = packet.game_info.seconds_elapsed - self.p_time
+		self.p_time = packet.game_info.seconds_elapsed
+		
+		self.execute_time -= delta
+		
+		if self.execute_time < 0:
+			return Test_Drive_Goal()
+		
+		if self.line_arc_line.valid:
+			self.line_arc_line.render(agent)
+		else:
+			return Test_Drive_Goal()
+		
+		agent.controller_state.handbrake = False
+		
+		if self.stage == 1:
+			
+			my_car = packet.game_cars[agent.index]
+			
+			car_v = my_car.physics.velocity.length()
+			
+			a = (car_v - self.p_car_v) * delta
+			
+			vector = Vec2.cast(my_car.physics.location) - self.line_arc_line.arc_center
+			
+			off = (vector.length() - self.line_arc_line.arc_radius) * 0.05
+			
+			ang = vector.inflate().angle_between(self.line_arc_line.a2.inflate())
+			if self.line_arc_line.offset.dot(vector) > 0:
+				ang = math.pi * 2 - ang
+			
+			s_mag = 1 / (self.line_arc_line.arc_radius * curvature(car_v)) # + constrain(off) * 0.3)
+			agent.controller_state.steer = constrain(s_mag * -sign(correction(my_car, self.line_arc_line.p2.inflate() - my_car.physics.location)))
+			
+			target_v = (ang * self.line_arc_line.arc_radius + self.line_arc_line.offset.length()) / self.execute_time
+			
+			agent.controller_state.throttle = (target_v - car_v) * 0.05
+			if abs(agent.controller_state.throttle) < 0.2:
+				agent.controller_state.throttle = 0.1
+			
+			agent.controller_state.boost = car_v < target_v
+			
+			# Transition into final part once we are facing the right direction
+			if (self.line_arc_line.offset).normal(-1).dot(Vec3(1, 0, 0).align_to(my_car.physics.rotation)) > 0.99:
+				self.stage += 1
+			
+			self.p_car_v = car_v
+			
+		else:
+			p = self.line_arc_line.p1 if self.stage == 0 else self.line_arc_line.target
+			
+			my_car = packet.game_cars[agent.index]
+			car_to_loc_3d = p.inflate() - my_car.physics.location
+			
+			car_v = my_car.physics.velocity.length()
+			
+			if self.stage == 0:
+				target_v = (car_to_loc_3d.length() + self.line_arc_line.arc_length + self.line_arc_line.offset.length()) / self.execute_time + 15
+			else:
+				target_v = car_to_loc_3d.length() / self.execute_time
+			
+			heading_err = correction(my_car, car_to_loc_3d)
+			heading_err_deg_abs = abs(math.degrees(heading_err))
+			agent.controller_state.steer = steer_for_heading_err(heading_err)
+			agent.controller_state.throttle = (target_v - car_v) * 0.02
+			if abs(agent.controller_state.throttle) < 0.2:
+				agent.controller_state.throttle = 0.1
+			agent.controller_state.boost = car_v + 50 < target_v
+			
+			if car_to_loc_3d.length() < car_v * delta * 2 + 50:
+				self.stage += 1
+			
+			self.p_car_v = car_v
+		
+	
 
+class Path_Hit:
+	def __init__(self, drive_path, time):
+		self.drive_path = drive_path
+		self.time = time
+
+class Test_Line_Arc_Line_Init(State):
+	
+	def __init__(self):
+		self.driver = None
+	
+	def calc_path(self, agent, packet):
+		
+		my_car = packet.game_cars[agent.index]
+		current_t = packet.game_info.seconds_elapsed
+		
+		target_t = -1
+		drive_path = None
+		for i in range(0, agent.ball_prediction.num_slices, 3):
+			s = agent.ball_prediction.slices[i]
+			ball = s.physics
+			if ball.location.z < 120 and calc_hit(my_car, ball.location).time < s.game_seconds - current_t:
+				attack_vec = (ball.location - agent.field_info.opponent_goal.location).normal()
+				dp = Line_Arc_Line(my_car, ball.location + attack_vec * 140, attack_vec * 300)
+				if not dp.valid:
+					continue
+				drive_path = dp
+				target_t = s.game_seconds - current_t
+				if drive_path.calc_time() < target_t:
+					break
+		
+		return Path_Hit(drive_path, target_t)
+		
+	
+	def output(self, agent, packet):
+		
+		my_car = packet.game_cars[agent.index]
+		drive_path = self.calc_path(agent, packet)
+		if drive_path.drive_path is None:
+			return Test_Drive_Goal()
+		self.driver = Test_Line_Arc_Line(packet, drive_path.drive_path, drive_path.time)
+		self.driver.output(agent, packet)
+		
+		car_to_p1 = (drive_path.drive_path.p1 - my_car.physics.location).normal().inflate()
+		
+		if Vec3(1, 0, 0).align_to(my_car.physics.rotation).dot(car_to_p1) > 0.99:
+			return self.driver
+		
+
+class Test_Drive_Goal(State):
+	def output(self, agent, packet):
+		my_car = packet.game_cars[agent.index]
+		agent.controller_state = drive(agent, packet, agent.field_info.my_goal.location, 2)
+		if (my_car.physics.location - agent.field_info.my_goal.location).length() < 1000:
+			return Test_Line_Arc_Line_Init()
 
