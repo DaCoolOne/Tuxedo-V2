@@ -50,7 +50,9 @@ def project_future(phys, t, a = None):
 		a = Vec3()
 	return Psuedo_Physics(
 		velocity = a * t + phys.velocity,
-		location = a * (t * t) + phys.velocity * t + phys.location
+		location = a * (t * t) + phys.velocity * t + phys.location,
+		rotation = phys.rotation,
+		angular_velocity = phys.angular_velocity
 	)
 
 # Thank you RLBot wiki! :D
@@ -221,7 +223,7 @@ class Line_Arc_Line:
 			self.valid = False
 			return
 		
-		self.arc_radius = turn_radius(v_upper)
+		self.arc_radius = turn_radius(v_upper) * 1.1 # Add a slight multiplier so that the cars can properly navigate the arc
 		
 		cp = self.offset.normal(self.arc_radius).rot90()
 		
@@ -257,9 +259,9 @@ class Line_Arc_Line:
 		# start_to_p1_b = (self.arc_center + p1_b - self.start)
 		
 		# Arc direction
-		arc_dir = sign(cp.dot(self.offset.rot90()) * -1)
+		self.arc_dir = sign(cp.dot(self.offset.rot90()) * -1)
 		
-		if sign(p1_a.rot90().dot(start_to_p1_a)) == arc_dir:
+		if sign(p1_a.rot90().dot(start_to_p1_a)) == self.arc_dir:
 			self.a1 = p1_a
 			self.p1 = self.arc_center + p1_a
 		else:

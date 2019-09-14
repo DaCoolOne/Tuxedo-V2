@@ -340,24 +340,44 @@ class Test_Line_Arc_Line(State):
 			
 			a = (car_v - self.p_car_v) * delta
 			
-			vector = Vec2.cast(my_car.physics.location) - self.line_arc_line.arc_center
+			phys = project_future(my_car.physics, delta * 2)
 			
-			off = (vector.length() - self.line_arc_line.arc_radius) * 0.05
+			vector = Vec2.cast(phys.location) - self.line_arc_line.arc_center
+			
+			# off = (vector.length() - self.line_arc_line.arc_radius) * 0.05
 			
 			ang = vector.inflate().angle_between(self.line_arc_line.a2.inflate())
-			if self.line_arc_line.offset.dot(vector) > 0:
+			if self.line_arc_line.offset.dot(vector) < 0:
 				ang = math.pi * 2 - ang
 			
-			s_mag = 1 / (self.line_arc_line.arc_radius * curvature(car_v)) # + constrain(off) * 0.3)
-			agent.controller_state.steer = constrain(s_mag * -sign(correction(my_car, self.line_arc_line.p2.inflate() - my_car.physics.location)))
+			arc_dir = self.line_arc_line.arc_dir
 			
-			target_v = (ang * self.line_arc_line.arc_radius + self.line_arc_line.offset.length()) / self.execute_time
+			if sign(ang) != sign(arc_dir):
+				ang *= -1
+			
+			# self.line_arc_line.arc_dir
+			
+			a = self.line_arc_line.a2.angle() + ang - arc_dir * 0.4
+			p = self.line_arc_line.arc_center + Vec2(math.cos(a) * self.line_arc_line.arc_radius, math.sin(a) * self.line_arc_line.arc_radius)
+			car_to_loc_3d = p.inflate() - phys.location
+			
+			heading_err = correction(my_car, car_to_loc_3d)
+			agent.controller_state.steer = -heading_err * abs(heading_err) * 20
+			
+			agent.renderer.draw_string_3d((my_car.physics.location + Vec3(0, 0, 1000)).UI_Vec3(), 2, 2, str(int(math.degrees(ang))), agent.renderer.yellow())
+			
+			# s_mag = 1 / (self.line_arc_line.arc_radius * curvature(car_v)) + constrain(off) * 0.5
+			# agent.controller_state.steer = constrain(s_mag * -sign(correction(my_car, self.line_arc_line.p2.inflate() - my_car.physics.location)))
+			
+			render_star(agent, p.inflate(20), agent.renderer.blue(), 50)
+			
+			target_v = (abs(ang) * self.line_arc_line.arc_radius + self.line_arc_line.offset.length()) / self.execute_time
 			
 			agent.controller_state.throttle = (target_v - car_v) * 0.05
 			if abs(agent.controller_state.throttle) < 0.2:
 				agent.controller_state.throttle = 0.1
 			
-			agent.controller_state.boost = car_v < target_v
+			agent.controller_state.boost = car_v + 50 < target_v
 			
 			# Transition into final part once we are facing the right direction
 			if (self.line_arc_line.offset).normal(-1).dot(Vec3(1, 0, 0).align_to(my_car.physics.rotation)) > 0.99:
@@ -374,16 +394,17 @@ class Test_Line_Arc_Line(State):
 			car_v = my_car.physics.velocity.length()
 			
 			if self.stage == 0:
-				target_v = (car_to_loc_3d.length() + self.line_arc_line.arc_length + self.line_arc_line.offset.length()) / self.execute_time + 15
+				target_v = (car_to_loc_3d.length() + self.line_arc_line.arc_length + self.line_arc_line.offset.length()) / self.execute_time - 10
 			else:
 				target_v = car_to_loc_3d.length() / self.execute_time
 			
 			heading_err = correction(my_car, car_to_loc_3d)
-			heading_err_deg_abs = abs(math.degrees(heading_err))
+			
 			agent.controller_state.steer = steer_for_heading_err(heading_err)
 			agent.controller_state.throttle = (target_v - car_v) * 0.02
 			if abs(agent.controller_state.throttle) < 0.2:
 				agent.controller_state.throttle = 0.1
+			
 			agent.controller_state.boost = car_v + 50 < target_v
 			
 			if car_to_loc_3d.length() < car_v * delta * 2 + 50:
@@ -413,7 +434,7 @@ class Test_Line_Arc_Line_Init(State):
 		for i in range(0, agent.ball_prediction.num_slices, 3):
 			s = agent.ball_prediction.slices[i]
 			ball = s.physics
-			if ball.location.z < 120 and calc_hit(my_car, ball.location).time < s.game_seconds - current_t:
+			if ball.location.z < 100 and calc_hit(my_car, ball.location).time < s.game_seconds - current_t:
 				attack_vec = (ball.location - agent.field_info.opponent_goal.location).normal()
 				dp = Line_Arc_Line(my_car, ball.location + attack_vec * 140, attack_vec * 300)
 				if not dp.valid:
@@ -437,14 +458,15 @@ class Test_Line_Arc_Line_Init(State):
 		
 		car_to_p1 = (drive_path.drive_path.p1 - my_car.physics.location).normal().inflate()
 		
-		if Vec3(1, 0, 0).align_to(my_car.physics.rotation).dot(car_to_p1) > 0.99:
+		if Vec3(1, 0, 0).align_to(my_car.physics.rotation).dot(car_to_p1) > 0.99 and car_to_p1.length() < 300:
 			return self.driver
 		
+	
 
 class Test_Drive_Goal(State):
 	def output(self, agent, packet):
 		my_car = packet.game_cars[agent.index]
 		agent.controller_state = drive(agent, packet, agent.field_info.my_goal.location, 2)
-		if (my_car.physics.location - agent.field_info.my_goal.location).length() < 1000:
+		if (my_car.physics.location - agent.field_info.my_goal.location).length() < 1000 or (my_car.physics.location - packet.game_ball.physics.location).length() > 3000:
 			return Test_Line_Arc_Line_Init()
 
