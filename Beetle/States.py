@@ -344,12 +344,15 @@ class Test_Line_Arc_Line(State):
 			phys = project_future(my_car.physics, delta * 2)
 			
 			vector = Vec2.cast(phys.location) - self.line_arc_line.arc_center
+			vector2 = Vec2.cast(my_car.physics.location) - self.line_arc_line.arc_center
 			
 			# off = (vector.length() - self.line_arc_line.arc_radius) * 0.05
 			
 			ang = vector.inflate().angle_between(self.line_arc_line.a2.inflate())
+			ang2 = vector2.inflate().angle_between(self.line_arc_line.a2.inflate())
 			if self.line_arc_line.offset.dot(vector) < 0:
 				ang = math.pi * 2 - ang
+				ang2 = math.pi * 2 - ang2
 			
 			arc_dir = self.line_arc_line.arc_dir
 			
@@ -372,9 +375,9 @@ class Test_Line_Arc_Line(State):
 			
 			render_star(agent, p.inflate(20), agent.renderer.blue(), 50)
 			
-			target_v = (abs(ang) * self.line_arc_line.arc_radius + self.line_arc_line.offset.length()) / self.execute_time
+			target_v = (ang2 * self.line_arc_line.arc_radius + self.line_arc_line.offset.length()) / self.execute_time
 			
-			agent.controller_state.throttle = (target_v - car_v) * 0.05
+			agent.controller_state.throttle = (target_v - car_v + 50) * 0.03
 			if abs(agent.controller_state.throttle) < 0.2:
 				agent.controller_state.throttle = 0.1
 			
@@ -402,13 +405,13 @@ class Test_Line_Arc_Line(State):
 			heading_err = correction(my_car, car_to_loc_3d)
 			
 			agent.controller_state.steer = steer_for_heading_err(heading_err)
-			agent.controller_state.throttle = (target_v - car_v) * 0.02
+			agent.controller_state.throttle = (target_v - car_v + 50) * 0.02
 			if abs(agent.controller_state.throttle) < 0.2:
 				agent.controller_state.throttle = 0.1
 			
 			agent.controller_state.boost = car_v + 100 < target_v
 			
-			agent.controller_state.handbrake = abs(heading_err) > math.pi * 0.5 and car_v > 500
+			agent.controller_state.handbrake = abs(heading_err) > math.pi * 0.5 and car_v > 500 and abs(my_car.physics.angular_velocity.z) < 10
 			
 			if car_to_loc_3d.length() < car_v * delta * 2 + 50:
 				self.stage += 1
@@ -451,7 +454,7 @@ class Test_Line_Arc_Line_Init(State):
 				lerp_val = clamp((2000 - t_v.length()) / 2100, 0, 1)
 				attack_vec = (target_vec_2 * lerp_val + target_vec * (1 - lerp_val)).normal()
 				dp = Line_Arc_Line(my_car, ball.location + attack_vec * 140, attack_vec * 500)
-				if not dp.valid:
+				if not dp.valid or not dp.check_in_bounds():
 					continue
 				drive_path = dp
 				target_t = s.game_seconds - current_t

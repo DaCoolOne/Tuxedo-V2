@@ -204,6 +204,10 @@ class ArcTurn:
 		renderer.draw_polyline_3d(points, color)
 	
 
+# Rough approximator for if a point is in bounds. Used by Line_Arc_Line class
+def point_in_bounds(point):
+	return abs(point.x) < 4096 and abs(point.y) < 5120
+
 class Line_Arc_Line:
 	# offset represents line 1
 	def __init__(self, car, target, offset):
@@ -298,10 +302,31 @@ class Line_Arc_Line:
 		
 	
 	def calc_hit(self):
-		return Time_to_Pos((self.start - self.p1).length() + (self.arc_length + self.offset.length()), self.car.physics.velocity.length(), self.car.boost)
+		t = Time_to_Pos((self.start - self.p1).length() + (self.arc_length), self.car.physics.velocity.length(), self.car.boost)
+		t.time += self.offset.length() / t.velocity
+		return t
 	
 	def calc_time(self):
 		return self.calc_hit().time
+	
+	def check_in_bounds(self):
+		return point_in_bounds(
+			self.target
+		) and point_in_bounds(
+			self.p1
+		) and point_in_bounds(
+			self.p2
+		) and point_in_bounds(
+			self.arc_center + Vec2( 1, 0) * self.arc_radius
+		) and point_in_bounds(
+			self.arc_center + Vec2(0,  1) * self.arc_radius
+		) and point_in_bounds(
+			self.arc_center + Vec2(-1, 0) * self.arc_radius
+		) and point_in_bounds(
+			self.arc_center + Vec2(0, -1) * self.arc_radius
+		)
+		
+	
 
 class Hit():
 	def __init__(self, time = None, velocity = None, location = None):
