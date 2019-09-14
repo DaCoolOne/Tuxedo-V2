@@ -110,13 +110,13 @@ class Maneuver_Flip_Ball(Maneuver):
 	
 	def update(self, agent, packet):
 		dt = packet.game_info.seconds_elapsed - self.start_time
-		if dt < 0.1:
+		if dt < 0.2:
 			# Jump into air
 			Align_Car_To(agent, packet, self.f, Vec3(0, 0, 1))
 			agent.controller_state.jump = True
 			car = packet.game_cars[agent.index]
 			agent.controller_state.throttle = (car.physics.velocity).align_from(car.physics.rotation).x
-		elif dt < 0.3:
+		elif dt < 0.25:
 			Align_Car_To(agent, packet, self.f, Vec3(0, 0, 1))
 			# Pause
 			agent.controller_state.jump = False

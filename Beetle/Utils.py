@@ -210,6 +210,8 @@ class Line_Arc_Line:
 		# Used to signal early aborts
 		self.valid = True
 		
+		self.car = car
+		
 		self.start = Vec2.cast(car.physics.location)
 		self.target = Vec2.cast(target)
 		self.offset = Vec2.cast(offset)
@@ -295,9 +297,11 @@ class Line_Arc_Line:
 		agent.renderer.draw_line_3d(self.start.inflate(20).UI_Vec3(), self.p1.inflate(20).UI_Vec3(), agent.renderer.blue())
 		
 	
-	def calc_time(self):
-		return self.vel.time + (self.arc_length + self.offset.length()) / self.vel.velocity
+	def calc_hit(self):
+		return Time_to_Pos((self.start - self.p1).length() + (self.arc_length + self.offset.length()), self.car.physics.velocity.length(), self.car.boost)
 	
+	def calc_time(self):
+		return self.calc_hit().time
 
 class Hit():
 	def __init__(self, time = None, velocity = None, location = None):

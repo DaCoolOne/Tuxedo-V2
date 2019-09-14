@@ -302,7 +302,7 @@ class Align_For_Aerial(State):
 
 class Test_Line_Arc_Line(State):
 	
-	def __init__(self, packet, line_arc_line, execute_time = -1):
+	def __init__(self, packet, line_arc_line, do_flip = True, execute_time = -1):
 		self.line_arc_line = line_arc_line
 		if execute_time < 0:
 			self.execute_time = line_arc_line.calc_time()
@@ -311,6 +311,7 @@ class Test_Line_Arc_Line(State):
 		self.stage = 0
 		self.p_time = packet.game_info.seconds_elapsed
 		self.p_car_v = 1000
+		self.do_flip = do_flip
 	
 	def reset(self, packet, line_arc_line, execute_time = -1):
 		self.__init__(packet, line_arc_line, execute_time)
@@ -377,7 +378,7 @@ class Test_Line_Arc_Line(State):
 			if abs(agent.controller_state.throttle) < 0.2:
 				agent.controller_state.throttle = 0.1
 			
-			agent.controller_state.boost = car_v + 50 < target_v
+			agent.controller_state.boost = car_v + 100 < target_v
 			
 			# Transition into final part once we are facing the right direction
 			if (self.line_arc_line.offset).normal(-1).dot(Vec3(1, 0, 0).align_to(my_car.physics.rotation)) > 0.99:
@@ -394,7 +395,7 @@ class Test_Line_Arc_Line(State):
 			car_v = my_car.physics.velocity.length()
 			
 			if self.stage == 0:
-				target_v = (car_to_loc_3d.length() + self.line_arc_line.arc_length + self.line_arc_line.offset.length()) / self.execute_time - 10
+				target_v = (car_to_loc_3d.length() + self.line_arc_line.arc_length + self.line_arc_line.offset.length()) / self.execute_time
 			else:
 				target_v = car_to_loc_3d.length() / self.execute_time
 			
@@ -405,19 +406,26 @@ class Test_Line_Arc_Line(State):
 			if abs(agent.controller_state.throttle) < 0.2:
 				agent.controller_state.throttle = 0.1
 			
-			agent.controller_state.boost = car_v + 50 < target_v
+			agent.controller_state.boost = car_v + 100 < target_v
+			
+			agent.controller_state.handbrake = abs(heading_err) > math.pi * 0.5 and car_v > 500
 			
 			if car_to_loc_3d.length() < car_v * delta * 2 + 50:
 				self.stage += 1
 			
 			self.p_car_v = car_v
 		
+		if self.execute_time < 0.2 and self.stage == 2 and self.do_flip:
+			Flip_To_Ball(agent, packet, low_flip = True)
+			return Test_Drive_Goal()
+		
 	
 
 class Path_Hit:
-	def __init__(self, drive_path, time):
+	def __init__(self, drive_path, time, do_flip):
 		self.drive_path = drive_path
 		self.time = time
+		self.do_flip = do_flip
 
 class Test_Line_Arc_Line_Init(State):
 	
@@ -431,20 +439,27 @@ class Test_Line_Arc_Line_Init(State):
 		
 		target_t = -1
 		drive_path = None
+		do_flip = True
 		for i in range(0, agent.ball_prediction.num_slices, 3):
 			s = agent.ball_prediction.slices[i]
 			ball = s.physics
-			if ball.location.z < 100 and calc_hit(my_car, ball.location).time < s.game_seconds - current_t:
-				attack_vec = (ball.location - agent.field_info.opponent_goal.location).normal()
-				dp = Line_Arc_Line(my_car, ball.location + attack_vec * 140, attack_vec * 300)
+			if ball.location.z < 110 and calc_hit(my_car, ball.location).time < s.game_seconds - current_t:
+				target_vec = (ball.location - agent.field_info.opponent_goal.location)
+				target_vec_2 = (ball.location - agent.field_info.opponent_goal.closest_point(ball.location))
+				t_v = target_vec_2.copy()
+				t_v.y *= 0.3
+				lerp_val = clamp((2000 - t_v.length()) / 2100, 0, 1)
+				attack_vec = (target_vec_2 * lerp_val + target_vec * (1 - lerp_val)).normal()
+				dp = Line_Arc_Line(my_car, ball.location + attack_vec * 140, attack_vec * 500)
 				if not dp.valid:
 					continue
 				drive_path = dp
 				target_t = s.game_seconds - current_t
+				do_flip = target_vec.length() < 5000
 				if drive_path.calc_time() < target_t:
 					break
 		
-		return Path_Hit(drive_path, target_t)
+		return Path_Hit(drive_path, target_t, do_flip)
 		
 	
 	def output(self, agent, packet):
@@ -453,12 +468,12 @@ class Test_Line_Arc_Line_Init(State):
 		drive_path = self.calc_path(agent, packet)
 		if drive_path.drive_path is None:
 			return Test_Drive_Goal()
-		self.driver = Test_Line_Arc_Line(packet, drive_path.drive_path, drive_path.time)
+		self.driver = Test_Line_Arc_Line(packet, drive_path.drive_path, execute_time = drive_path.time, do_flip = drive_path.do_flip)
 		self.driver.output(agent, packet)
 		
-		car_to_p1 = (drive_path.drive_path.p1 - my_car.physics.location).normal().inflate()
+		car_to_p1 = (drive_path.drive_path.p1 - my_car.physics.location).inflate()
 		
-		if Vec3(1, 0, 0).align_to(my_car.physics.rotation).dot(car_to_p1) > 0.99 and car_to_p1.length() < 300:
+		if Vec3(1, 0, 0).align_to(my_car.physics.rotation).dot(car_to_p1.normal()) > 0.95 and car_to_p1.length() < 700:
 			return self.driver
 		
 	

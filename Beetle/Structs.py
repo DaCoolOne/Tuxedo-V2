@@ -5,6 +5,9 @@ from rlbot.utils.structures.game_data_struct import Vector3 as UI_Vec3
 
 from enum import Enum
 
+def sign(n):
+	return 1 if n > 0 else -1
+
 def constrain(n):
 	return max(-1, min(1, n))
 
@@ -179,6 +182,13 @@ class GoalInfo():
 	def __init__(self, goal):
 		self.location = Vec3.cast(goal.location)
 		self.direction = Vec3.cast(goal.direction)
+	
+	# Returns the closest shootable point in the goal
+	def closest_point(self, position, width = 800):
+		p = min(width, abs(self.location.x - position.x)) * sign(position.x - self.location.x)
+		v = self.location.copy()
+		v.x = self.location.x + p
+		return v
 
 class BoostInfo():
 	def __init__(self, boost, index):
