@@ -39,8 +39,8 @@ class Jumpshot_Handler(State):
 		myGoal = Vec3(0, 5200 * sign(agent.team), 100)
 		touch = agent.touch
 		my_car = packet.game_cars[agent.index]
-		rotator = Rotation(my_car.physics.rotation)
-		car_location = Vec3_from_Vector3(my_car.physics.location)
+		rotator = my_car.physics.rotation
+		car_location = my_car.physics.location
 		grounded,on_wall = grounded_and_wall_check(agent,packet)
 		targetDistance = abs((car_location- touch.location).length())
 		shot_limit = 1
@@ -49,7 +49,7 @@ class Jumpshot_Handler(State):
 		angle = abs(math.degrees(rotator.angle_to_vec(touch.location.flatten())))
 		car_offset = agent.hitbox.get_offset_by_angle(angle)
 		total_offset = car_offset+ball_offset
-
+		
 		
 		if not perfect_world:
 			total_offset*=.75
@@ -57,20 +57,20 @@ class Jumpshot_Handler(State):
 		if abs((car_location- myGoal).length()) < 2500:
 			direction = (touch.location.flatten() - myGoal.flatten()).normal()
 			ideal_position = touch.location-(direction*total_offset)
-
+		
 		else:
 			direction = (enemyGoal.flatten() - touch.location.flatten()).normal()
 			ideal_position = touch.location - (direction * total_offset)
-
+		
 		bad_position = touch.location + (direction * total_offset)
 		
-
+		targetDistance = abs((car_location- touch.location).length())
 		agent.controller_state = drive(agent, packet, ideal_position.flatten(),touch.time)
 		if grounded and not on_wall:
-			futurePos = car_location + Vec3_from_Vector3(my_car.physics.velocity)*agent.delta
+			futurePos = car_location + my_car.physics.velocity * agent.delta
 			if touch.time < shot_limit:
-				if abs((futurePos-ideal_position).length()) <  abs((futurePos-bad_position).length()):
-					speed = clamp(abs(Vec3_from_Vector3(my_car.physics.velocity).length()),0.001,2300)
+				if abs((futurePos-ideal_position).length()) < abs((futurePos-bad_position).length()):
+					speed = clamp(abs(my_car.physics.velocity.length()),0.001,2300)
 					if speed * touch.time >= clamp(targetDistance -total_offset,0,99999):
 						agent.maneuver = Maneuver_Jump_Shot(agent, packet, touch.time, touch.location)
 						agent.maneuver_complete = False
@@ -418,9 +418,20 @@ class Test_Line_Arc_Line(State):
 			
 			self.p_car_v = car_v
 		
-		if self.execute_time < 0.2 and self.stage == 2 and self.do_flip:
-			Flip_To_Ball(agent, packet, low_flip = True)
-			return Test_Drive_Goal()
+		# Jump shot stuff
+		ball = Get_Ball_At_T(packet, agent.ball_prediction, self.execute_time).physics
+		
+		ball_offset = 93
+		angle = abs(math.degrees(my_car.physics.rotation.angle_to_vec(ball.location.flatten())))
+		car_offset = agent.hitbox.get_offset_by_angle(angle)
+		total_offset = car_offset+ball_offset
+		
+		targetDistance = abs((my_car.physics.location- ball.location).length())
+		speed = clamp(abs(my_car.physics.velocity.length()),0.001,2300)
+		if speed * self.execute_time < clamp(targetDistance - total_offset,0,99999) and self.execute_time < 1 and self.stage == 2:
+			agent.maneuver = Maneuver_Jump_Shot(agent, packet, self.execute_time, ball.location)
+			agent.maneuver_complete = False
+			return Test_Line_Arc_Line_Init()
 		
 	
 
@@ -446,14 +457,14 @@ class Test_Line_Arc_Line_Init(State):
 		for i in range(0, agent.ball_prediction.num_slices, 3):
 			s = agent.ball_prediction.slices[i]
 			ball = s.physics
-			if ball.location.z < 110 and calc_hit(my_car, ball.location).time < s.game_seconds - current_t:
+			if ball.location.z < 265 and calc_hit(my_car, ball.location).time < s.game_seconds - current_t:
 				target_vec = (ball.location - agent.field_info.opponent_goal.location)
-				target_vec_2 = (ball.location - agent.field_info.opponent_goal.closest_point(ball.location))
-				t_v = target_vec_2.copy()
-				t_v.y *= 0.3
-				lerp_val = clamp((2000 - t_v.length()) / 2100, 0, 1)
-				attack_vec = (target_vec_2 * lerp_val + target_vec * (1 - lerp_val)).normal()
-				dp = Line_Arc_Line(my_car, ball.location + attack_vec * 140, attack_vec * 500)
+				# target_vec_2 = (ball.location - agent.field_info.opponent_goal.closest_point(ball.location))
+				# t_v = target_vec_2.copy()
+				# t_v.y *= 0.3
+				# lerp_val = clamp((2000 - t_v.length()) / 2100, 0, 1)
+				attack_vec = agent.field_info.my_goal.direction * -1 # (target_vec_2 * lerp_val + target_vec * (1 - lerp_val)).normal()
+				dp = Line_Arc_Line(my_car, ball.location + attack_vec * 140, attack_vec * 700)
 				if not dp.valid or not dp.check_in_bounds():
 					continue
 				drive_path = dp
@@ -470,14 +481,15 @@ class Test_Line_Arc_Line_Init(State):
 		my_car = packet.game_cars[agent.index]
 		drive_path = self.calc_path(agent, packet)
 		if drive_path.drive_path is None:
-			return Test_Drive_Goal()
-		self.driver = Test_Line_Arc_Line(packet, drive_path.drive_path, execute_time = drive_path.time, do_flip = drive_path.do_flip)
-		self.driver.output(agent, packet)
-		
-		car_to_p1 = (drive_path.drive_path.p1 - my_car.physics.location).inflate()
-		
-		if Vec3(1, 0, 0).align_to(my_car.physics.rotation).dot(car_to_p1.normal()) > 0.95 and car_to_p1.length() < 700:
-			return self.driver
+			Test_Drive_Goal().output(agent, packet)
+		else:
+			self.driver = Test_Line_Arc_Line(packet, drive_path.drive_path, execute_time = drive_path.time, do_flip = drive_path.do_flip)
+			self.driver.output(agent, packet)
+			
+			car_to_p1 = (drive_path.drive_path.p1 - my_car.physics.location).inflate()
+			
+			if Vec3(1, 0, 0).align_to(my_car.physics.rotation).dot(car_to_p1.normal()) > 0.95 and car_to_p1.length() < 700:
+				return self.driver
 		
 	
 

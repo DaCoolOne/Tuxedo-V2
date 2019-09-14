@@ -121,10 +121,6 @@ class Vec2:
 		return math.atan2(self.y, self.x)
 	
 
-def Vec3_from_Vector3(vec):
-	return Vec3(vec.x,vec.y,vec.z)
-	
-
 class Ray2D:
 	
 	def __init__(self, location = Vec2(), direction = Vec2()):
@@ -206,7 +202,7 @@ class ArcTurn:
 
 # Rough approximator for if a point is in bounds. Used by Line_Arc_Line class
 def point_in_bounds(point):
-	return abs(point.x) < 4096 and abs(point.y) < 5120
+	return (abs(point.x) < 3996 and abs(point.y) < 5020) or (abs(point.x) < 793 and abs(point.y) < 5420)
 
 class Line_Arc_Line:
 	# offset represents line 1
@@ -605,7 +601,7 @@ class Hit_Prediction():
 				
 				loc = slice.physics.location
 				t = slice.game_seconds - current_time
-				if loc.z > 200:
+				if loc.z > 265:
 					air_hit = self.calc_air(car, loc, t, packet.game_info.world_gravity_z)
 					if (air_hit.velocity.length() < 1000 and t < car.boost * (1/33)):
 						# Add a maximum velocity check
@@ -671,7 +667,7 @@ class Hit_Prediction():
 				continue
 			loc = (slice.physics.location if slice.game_seconds < self.hit_game_seconds else self.hit_position + shot_vec * (slice.game_seconds - self.hit_game_seconds)) + offset
 			t = slice.game_seconds - current_time
-			if loc.z > 200:
+			if loc.z > 265:
 				air_hit = self.calc_air(car, loc, slice.game_seconds - current_time, packet.game_info.world_gravity_z)
 				if (air_hit.velocity.length() < 1000 and t < car.boost * 0.033 and loc.z < max_height) or i >= self.prediction.num_slices - 3 or abs(loc.y) > 5120:
 					return Touch(t, loc, t <= self.hit_time, abs(loc.y) < 5120)

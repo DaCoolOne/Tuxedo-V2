@@ -151,26 +151,26 @@ class Maneuver_Jump_Shot(Maneuver):
 				self.angleTimer = clamp(self.jumpTimerMax / 4, 0.1, 0.15)
 		self.jumped = False
 		self.jumpTimer = 0
-
+	
 	def update(self,agent, packet):
 		age = packet.game_info.seconds_elapsed - self.start_time
 		controller_state = agent.controller_state
 		controller_state.throttle = 0
 		controller_state.boost = False
 		car = packet.game_cars[agent.index]
-		position = Vec3_from_Vector3(car.physics.location)
+		position = car.physics.location
 		if not self.jumped:
 			self.jumped = True
 			controller_state.jump = True
 		else:
 			#jumpTimer = age
-
+			
 			if age < self.angleTimer:
 				Align_Car_To(agent, packet,(position-self.target).normal(), Vec3(0, 0, 1))
-
+			
 			if age < self.jumpTimerMax:
 				controller_state.jump = True
-
+				
 			else:
 				if age >= self.jumpTimerMax:
 					if age >= self.delay - 0.2 and age < self.delay - 0.15:
@@ -323,6 +323,7 @@ def drive(agent, packet, target_loc, time_allotted, target_v=-1, min_straight_sp
 	
 	if abs(car_p.x) < 885 and abs(car_p.y) > 5050 and abs(target_loc.x) > 800: # Car in net
 		target_loc.x = 800 * sign(target_loc.x)
+		time_allotted = 0.1
 	
 	car_to_loc_3d = target_loc.flatten() - car_p
 	car_to_loc = car_to_loc_3d.flatten() # - car_dir * 40
