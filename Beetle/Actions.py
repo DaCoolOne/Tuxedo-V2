@@ -145,10 +145,11 @@ class Maneuver_Jump_Shot(Maneuver):
 		if self.delay >= 0.3:
 			if target.z <= 200:
 				self.jumpTimerMax = 0.1
-				self.angleTimer = clamp(self.jumpTimerMax / 4,0.05,0.15)
+				#self.angleTimer = clamp(self.jumpTimerMax / 4,0.05,0.15)
 			else:
 				self.jumpTimerMax = self.delay - 0.2
-				self.angleTimer = clamp(self.jumpTimerMax / 4, 0.1, 0.15)
+				#self.angleTimer = clamp(self.jumpTimerMax / 4, 0.1, 0.15)
+			self.angleTimer = self.delay - 0.1
 		self.jumped = False
 		self.jumpTimer = 0
 	
@@ -166,11 +167,11 @@ class Maneuver_Jump_Shot(Maneuver):
 			#jumpTimer = age
 			
 			if age < self.angleTimer:
-				Align_Car_To(agent, packet,(position-self.target).normal(), Vec3(0, 0, 1))
+				project_car = project_future(car.physics, self.delay - age)
+				Align_Car_To(agent, packet,(self.target-project_car.location).normal(), Vec3(0, 0, 1))
 			
 			if age < self.jumpTimerMax:
 				controller_state.jump = True
-				
 			else:
 				if age >= self.jumpTimerMax:
 					if age >= self.delay - 0.2 and age < self.delay - 0.15:
@@ -181,6 +182,7 @@ class Maneuver_Jump_Shot(Maneuver):
 						agent.controller_state.jump = True
 						agent.controller_state.pitch = -direction.x
 						agent.controller_state.roll = direction.y
+						agent.controller_state.yaw = 0
 					elif age < self.delay + 0.1:
 						controller_state.jump = False
 					else:
@@ -596,7 +598,7 @@ class Kickoff():
 				self.timer = 0.0
 			
 			# This is how we exit the maneuver
-			return packet.game_ball.physics.location.x != 0
+			return packet.game_ball.physics.location.y != 0
 		
 		else:
 			

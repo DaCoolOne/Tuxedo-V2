@@ -302,7 +302,7 @@ class Align_For_Aerial(State):
 
 class Test_Line_Arc_Line(State):
 	
-	def __init__(self, packet, line_arc_line, do_flip = True, execute_time = -1):
+	def __init__(self, agent, packet, line_arc_line, do_flip = True, execute_time = -1):
 		self.line_arc_line = line_arc_line
 		if execute_time < 0:
 			self.execute_time = line_arc_line.calc_time()
@@ -312,6 +312,9 @@ class Test_Line_Arc_Line(State):
 		self.p_time = packet.game_info.seconds_elapsed
 		self.p_car_v = 1000
 		self.do_flip = do_flip
+		
+		# Used to make sure ball doesn't move
+		self.predicted_ball_loc = Get_Ball_At_T(packet, agent.ball_prediction, self.execute_time).physics.location
 	
 	def reset(self, packet, line_arc_line, execute_time = -1):
 		self.__init__(packet, line_arc_line, execute_time)
@@ -324,12 +327,12 @@ class Test_Line_Arc_Line(State):
 		self.execute_time -= delta
 		
 		if self.execute_time < 0:
-			return Test_Drive_Goal()
+			return Test_Line_Arc_Line_Init()
 		
 		if self.line_arc_line.valid:
 			self.line_arc_line.render(agent)
 		else:
-			return Test_Drive_Goal()
+			return Test_Line_Arc_Line_Init()
 		
 		agent.controller_state.handbrake = False
 		
@@ -418,9 +421,14 @@ class Test_Line_Arc_Line(State):
 			
 			self.p_car_v = car_v
 		
-		# Jump shot stuff
+		# Check to make sure the shot is still valid
 		ball = Get_Ball_At_T(packet, agent.ball_prediction, self.execute_time).physics
 		
+		# Path needs to be abandoned, ball has moved
+		if (ball.location - self.predicted_ball_loc).length() > 25:
+			return Test_Line_Arc_Line_Init()
+		
+		# Jump shot stuff
 		ball_offset = 93
 		angle = abs(math.degrees(my_car.physics.rotation.angle_to_vec(ball.location.flatten())))
 		car_offset = agent.hitbox.get_offset_by_angle(angle)
@@ -428,7 +436,16 @@ class Test_Line_Arc_Line(State):
 		
 		targetDistance = abs((my_car.physics.location- ball.location).length())
 		speed = clamp(abs(my_car.physics.velocity.length()),0.001,2300)
-		if speed * self.execute_time < clamp(targetDistance - total_offset,0,99999) and self.execute_time < 1 and self.stage == 2:
+		
+		up_v = Vec3(0, 0, 1).align_to(my_car.physics.rotation)
+		
+		# Project car into the future
+		future_car = project_future(
+			project_future(Psuedo_Physics(location=my_car.physics.location,velocity=my_car.physics.velocity+up_v*300), min(self.execute_time,0.2), up_v * 1400),
+		max(0, self.execute_time - 0.2))
+		
+		# if speed * self.execute_time < clamp(targetDistance - total_offset,0,99999) and self.execute_time < 1 and self.stage == 2:
+		if future_car.location.z < ball.location.z + 70 and self.execute_time < 1 and self.stage == 2:
 			agent.maneuver = Maneuver_Jump_Shot(agent, packet, self.execute_time, ball.location)
 			agent.maneuver_complete = False
 			return Test_Line_Arc_Line_Init()
@@ -459,12 +476,13 @@ class Test_Line_Arc_Line_Init(State):
 			ball = s.physics
 			if ball.location.z < 265 and calc_hit(my_car, ball.location).time < s.game_seconds - current_t:
 				target_vec = (ball.location - agent.field_info.opponent_goal.location)
-				# target_vec_2 = (ball.location - agent.field_info.opponent_goal.closest_point(ball.location))
-				# t_v = target_vec_2.copy()
-				# t_v.y *= 0.3
-				# lerp_val = clamp((2000 - t_v.length()) / 2100, 0, 1)
-				attack_vec = agent.field_info.my_goal.direction * -1 # (target_vec_2 * lerp_val + target_vec * (1 - lerp_val)).normal()
-				dp = Line_Arc_Line(my_car, ball.location + attack_vec * 140, attack_vec * 700)
+				target_vec_2 = (ball.location - agent.field_info.opponent_goal.closest_point(ball.location))
+				t_v = target_vec_2.copy()
+				t_v.y *= 0.3
+				lerp_val = clamp((2000 - t_v.length()) / 2100, 0, 1)
+				attack_vec = (target_vec_2 * lerp_val + target_vec * (1 - lerp_val)).normal()
+				# attack_vec = agent.field_info.my_goal.direction * -1
+				dp = Line_Arc_Line(my_car, ball.location + attack_vec * 140, attack_vec * (400 + ball.location.z * 2))
 				if not dp.valid or not dp.check_in_bounds():
 					continue
 				drive_path = dp
@@ -483,7 +501,7 @@ class Test_Line_Arc_Line_Init(State):
 		if drive_path.drive_path is None:
 			Test_Drive_Goal().output(agent, packet)
 		else:
-			self.driver = Test_Line_Arc_Line(packet, drive_path.drive_path, execute_time = drive_path.time, do_flip = drive_path.do_flip)
+			self.driver = Test_Line_Arc_Line(agent, packet, drive_path.drive_path, execute_time = drive_path.time, do_flip = drive_path.do_flip)
 			self.driver.output(agent, packet)
 			
 			car_to_p1 = (drive_path.drive_path.p1 - my_car.physics.location).inflate()

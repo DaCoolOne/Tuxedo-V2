@@ -857,11 +857,9 @@ def ball_in_opponent_goal_time(agent, packet): # Returns -1 if ball not predicte
 
 # range(3, 6) is 3, 4, 5
 
-
 def Get_Ball_At_T(packet, prediction, time):
 	delta = packet.game_info.seconds_elapsed - prediction.slices[0].game_seconds
 	return prediction.slices[clamp(math.floor((delta + time) * 60), 0, prediction.num_slices - 1)]
-
 
 # Distance needed to change velocities (v_i -> v_f) using acceleration a
 def accel_dist(v_i, v_f, a): # vf^2 = vi^2 + 2*a*d  ->  d=(vf^2 - vi^2)/(2*a)
