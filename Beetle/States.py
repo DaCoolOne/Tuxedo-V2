@@ -344,7 +344,7 @@ class Test_Line_Arc_Line(State):
 			
 			a = (car_v - self.p_car_v) * delta
 			
-			phys = project_future(my_car.physics, delta * 2)
+			phys = project_future(packet, my_car.physics, delta * 2)
 			
 			vector = Vec2.cast(phys.location) - self.line_arc_line.arc_center
 			vector2 = Vec2.cast(my_car.physics.location) - self.line_arc_line.arc_center
@@ -425,7 +425,7 @@ class Test_Line_Arc_Line(State):
 		ball = Get_Ball_At_T(packet, agent.ball_prediction, self.execute_time).physics
 		
 		# Path needs to be abandoned, ball has moved
-		if (ball.location - self.predicted_ball_loc).length() > 25:
+		if (ball.location - self.predicted_ball_loc).length() > 50:
 			return Test_Line_Arc_Line_Init()
 		
 		# Jump shot stuff
@@ -440,12 +440,12 @@ class Test_Line_Arc_Line(State):
 		up_v = Vec3(0, 0, 1).align_to(my_car.physics.rotation)
 		
 		# Project car into the future
-		future_car = project_future(
-			project_future(Psuedo_Physics(location=my_car.physics.location,velocity=my_car.physics.velocity+up_v*300), min(self.execute_time,0.2), up_v * 1400),
+		future_car = project_future(packet, 
+			project_future(packet, Psuedo_Physics(location=my_car.physics.location,velocity=my_car.physics.velocity+up_v*300), min(self.execute_time,0.2), up_v * 1400),
 		max(0, self.execute_time - 0.2))
 		
 		# if speed * self.execute_time < clamp(targetDistance - total_offset,0,99999) and self.execute_time < 1 and self.stage == 2:
-		if future_car.location.z < ball.location.z + 70 and self.execute_time < 1 and self.stage == 2:
+		if future_car.location.z < ball.location.z + 30 and self.execute_time < 1 and self.stage == 2:
 			agent.maneuver = Maneuver_Jump_Shot(agent, packet, self.execute_time, ball.location)
 			agent.maneuver_complete = False
 			return Test_Line_Arc_Line_Init()
@@ -471,7 +471,7 @@ class Test_Line_Arc_Line_Init(State):
 		target_t = -1
 		drive_path = None
 		do_flip = True
-		for i in range(0, agent.ball_prediction.num_slices, 3):
+		for i in range(agent.ball_prediction.num_slices):
 			s = agent.ball_prediction.slices[i]
 			ball = s.physics
 			if ball.location.z < 265 and calc_hit(my_car, ball.location).time < s.game_seconds - current_t:

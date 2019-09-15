@@ -167,7 +167,7 @@ class Maneuver_Jump_Shot(Maneuver):
 			#jumpTimer = age
 			
 			if age < self.angleTimer:
-				project_car = project_future(car.physics, self.delay - age)
+				project_car = project_future(packet, car.physics, self.delay - age)
 				Align_Car_To(agent, packet,(self.target-project_car.location).normal(), Vec3(0, 0, 1))
 			
 			if age < self.jumpTimerMax:
@@ -576,13 +576,13 @@ class Kickoff():
 			
 			if not self.wave_dashed and self.jumped:
 				self.handbrake_timer = 0.0
-				if vel(my_car).z > 70:
+				if vel(my_car).z > 90:
 					Align_Car_To(agent, packet, car_to_ball.normal() - Vec3(0, 0, 0.6), Vec3(0, 0, 1))
 					agent.controller_state.boost = True
 				else:
 					Align_Car_To(agent, packet, car_to_ball.normal() + Vec3(0, 0, 0.7), Vec3(0, 0, 1))
 					agent.controller_state.boost = pos(my_car).z > 60
-					if pos(my_car).z < 40:
+					if pos(my_car).z < 45:
 						self.wave_dashed = True
 						agent.controller_state.jump = True
 						agent.controller_state.yaw = 0.0
@@ -631,22 +631,22 @@ class Aerial_Takeoff(Maneuver):
 		
 		# MATH IS FUN
 		takeoff_quick = Psuedo_Physics(car.physics.location, car.physics.velocity + car_up * 300)
-		takeoff_single = project_future(
+		takeoff_single = project_future(packet, 
 			Psuedo_Physics(car.physics.location, car.physics.velocity + car_up * 300), 0.2, car_up * 1400
 		)
-		takeoff_fast_single = project_future(
+		takeoff_fast_single = project_future(packet, 
 			Psuedo_Physics(car.physics.location, car.physics.velocity + car_up * 300), 0.2, car_up * 1400 + car_face * 1000
 		)
-		takeoff_double = project_future(
-			project_future(
+		takeoff_double = project_future(packet, 
+			project_future(packet, 
 				Psuedo_Physics(car.physics.location, car.physics.velocity + car_up * 300), 0.2, car_up * 1400
 			),
 			0.1
 		)
 		takeoff_double.velocity += car_up * 300
 		
-		takeoff_fast_double = project_future(
-			project_future(
+		takeoff_fast_double = project_future(packet, 
+			project_future(packet, 
 				Psuedo_Physics(car.physics.location, car.physics.velocity + car_up * 300), 0.2, car_up * 1400 + car_face * 1000
 			),
 			0.1, car_face * 1000

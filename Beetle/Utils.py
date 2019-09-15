@@ -45,9 +45,10 @@ def correct(target, val, mult = 1):
 	return (rad * mult)
 
 # Projects into the future given a time, acceleration, and initial physics.
-def project_future(phys, t, a = None):
+def project_future(packet, phys, t, a = None):
 	if a is None:
 		a = Vec3()
+	a.z = a.z + packet.game_info.world_gravity_z
 	return Psuedo_Physics(
 		velocity = a * t + phys.velocity,
 		location = a * (t * t) + phys.velocity * t + phys.location,
@@ -237,7 +238,7 @@ class Line_Arc_Line:
 		start_to_c = self.arc_center - self.start
 		
 		# Add sizable epsilon
-		if start_to_c.length() <= self.arc_radius + 0.0001:
+		if start_to_c.length() <= self.arc_radius + 0.00001:
 			self.valid = False
 			return
 		
@@ -531,7 +532,7 @@ class Touch:
 		return Touch(n[0], Vec3(n[1], n[2], n[3]), n[4], n[5])
 
 # Determines time for car to hit a position on the ground.
-def calc_hit(car, position):
+def calc_hit(car, position, minimum = False):
 	car_vel = car.physics.velocity
 	car_vel_len = car_vel.length()
 	car_pos = car.physics.location
@@ -545,9 +546,18 @@ def calc_hit(car, position):
 	turn = turn_radius(car_vel_len) * angle
 	len = car_path.length()
 	
+	if minimum:
+		# Calculate that we don't need to turn the whole way to hit.
+		if len > 160:
+			turn2 = math.acos(140 / len)
+			turn = max(0, turn - turn2)
+		else:
+			# So close that turning doesn't need to be taken into account
+			turn = 0
+	
 	# Calculate the time to get to the position
 	turn_time = turn / max(500, car_vel_len)
-	drive_time = Time_to_Pos(max(0.01, len - 200), car_vel_len, car.boost) if car_face.dot(car_vel) > 0.0 else Time_To_Pos_No_Boost(max(0.01, (len - 200)), car_vel_len)
+	drive_time = Time_to_Pos(max(0.01, len - 150), car_vel_len, car.boost) if car_face.dot(car_vel) > 0.0 else Time_To_Pos_No_Boost(max(0.01, (len - 200)), car_vel_len)
 	
 	drive_time.time += turn_time # + air_time
 	
@@ -590,7 +600,7 @@ class Hit_Prediction():
 		team = agent.team
 		current_time = packet.game_info.seconds_elapsed
 		self.hit_time = 0
-		for i in range(0, self.prediction.num_slices, 6):
+		for i in range(self.prediction.num_slices):
 			slice = self.prediction.slices[i]
 			if slice.game_seconds < current_time:
 				continue
@@ -602,35 +612,38 @@ class Hit_Prediction():
 				loc = slice.physics.location
 				t = slice.game_seconds - current_time
 				if loc.z > 265:
-					air_hit = self.calc_air(car, loc, t, packet.game_info.world_gravity_z)
-					if (air_hit.velocity.length() < 1000 and t < car.boost * (1/33)):
+					air_hit = self.calc_air(packet, car, loc, t, packet.game_info.world_gravity_z)
+					if (air_hit.velocity.length() <= 1000 and t < car.boost * (1/33)):
 						# Add a maximum velocity check
-						if project_future(car.physics, t, air_hit.velocity).velocity.length() < 2300:
+						if project_future(packet, car.physics, t, air_hit.velocity).velocity.length() < 2300:
 							self.hit_time = slice.game_seconds - current_time
 							self.hit_game_seconds = slice.game_seconds
 							self.hit_position = loc
 							self.hit_velocity = car.physics.velocity.length() + 600
+							self.hit_car = car
 				else:
-					hit = calc_hit(car, loc)
+					hit = calc_hit(car, loc, minimum = True)
 					if hit.time < slice.game_seconds - current_time:
 						# print(slice.game_seconds - current_time)
 						self.hit_time = slice.game_seconds - current_time
 						self.hit_game_seconds = slice.game_seconds
 						self.hit_position = loc
-						self.hit_velocity = min(2400, hit.velocity + 500) # Add 500 for flipping (Need to update to take into account direction of hit)
+						self.hit_velocity = min(2400, hit.velocity + (hit.velocity - slice.physics.velocity.length()) * 0.6 + 500) # Add 500 for flipping (Need to update to take into account direction of hit)
+						self.hit_car = car
 			
-			if not self.hit_time and i + 6 >= self.prediction.num_slices:
+			if not self.hit_time and i >= self.prediction.num_slices - 1:
 				self.hit_time = 6
 				self.hit_position = self.prediction.slices[i].physics.location
 				self.hit_game_seconds = current_time + 6
 				self.hit_velocity = 0
+				self.hit_car = packet.game_cars[0]
 			
 			if self.hit_time:
 				break
 	
 	def draw_path(self, renderer, c):
 		poly = []
-		for i in range(0, self.prediction.num_slices, 5):
+		for i in range(0, self.prediction.num_slices, 3):
 			slice = self.prediction.slices[i]
 			if slice.game_seconds > self.hit_game_seconds:
 				break
@@ -639,8 +652,24 @@ class Hit_Prediction():
 		renderer.draw_line_3d(poly[len(poly) - 1], self.hit_position.UI_Vec3(), c)
 	
 	# Designed for aerials. Calculates the delta v to hit a location at a time.
-	def calc_air(self, car, position, time, grav_z):
-		dv = delta_v(car.physics, position, max(0.0001, time), grav_z, car.physics.velocity + Vec3(0, 0, 300 if car.has_wheel_contact else 0).align_to(car.physics.rotation))
+	def calc_air(self, packet, car, position, time, grav_z):
+		car_up = Vec3(0, 0, 1).align_to(car.physics.rotation)
+		
+		# More accurate simulation of the jump
+		phys = project_future(packet, 
+			Psuedo_Physics(
+				location = car.physics.location,
+				velocity = car.physics.velocity + car_up * 300,
+				rotation = car.physics.rotation,
+				angular_velocity = car.physics.angular_velocity,
+			), 0.2, car_up * 1400
+		)
+		
+		dv = delta_v(phys, position, max(0.0001, time), grav_z)
+		
+		if dv.length() > 1000:
+			phys.velocity += car_up * 300
+			dv = delta_v(phys, position, max(0.0001, time), grav_z)
 		
 		return Hit(velocity = dv)
 	
@@ -653,28 +682,29 @@ class Hit_Prediction():
 		goal_pos = agent.field_info.my_goal.location
 		goal_pos.z = min(goal_pos.z, max_height)
 		goal_pos.x = clamp_abs(self.hit_position.x, 650)
-		goal_vec = (goal_pos - self.hit_position)
 		
-		if self.hit_time > 0.5:
+		if self.hit_time > 0.25:
+			goal_vec = (goal_pos - self.hit_position)
 			shot_vec = goal_vec.normal(self.hit_velocity * 1.5)
 		else:
 			# Todo, move this vector based on the direction of the other car.
-			shot_vec = goal_vec.normal(self.hit_velocity * 1.5)
+			v = self.hit_position - self.hit_car.physics.location
+			shot_vec = v.normal(self.hit_velocity * 1.5)
 		
-		for i in range(0, self.prediction.num_slices, 3):
+		for i in range(self.prediction.num_slices):
 			slice = self.prediction.slices[i]
 			if slice.game_seconds < current_time:
 				continue
 			loc = (slice.physics.location if slice.game_seconds < self.hit_game_seconds else self.hit_position + shot_vec * (slice.game_seconds - self.hit_game_seconds)) + offset
 			t = slice.game_seconds - current_time
 			if loc.z > 265:
-				air_hit = self.calc_air(car, loc, slice.game_seconds - current_time, packet.game_info.world_gravity_z)
+				air_hit = self.calc_air(packet, car, loc, slice.game_seconds - current_time, packet.game_info.world_gravity_z)
 				if (air_hit.velocity.length() < 1000 and t < car.boost * 0.033 and loc.z < max_height) or i >= self.prediction.num_slices - 3 or abs(loc.y) > 5120:
 					return Touch(t, loc, t <= self.hit_time, abs(loc.y) < 5120)
 			else:
 				#car_strike_loc = get_car_strike_loc(loc, packet, car)
 				#hit = self.calc_hit(car, car_strike_loc)
-				hit = calc_hit(car, loc)
+				hit = calc_hit(car, loc, minimum = True)
 				if (hit.time < slice.game_seconds - current_time and loc.z < max_height) or i >= self.prediction.num_slices - 3 or abs(loc.y) > 5120:
 					return Touch(max(t, hit.time), loc, t <= self.hit_time, abs(loc.y) < 5120)
 		
@@ -858,8 +888,15 @@ def ball_in_opponent_goal_time(agent, packet): # Returns -1 if ball not predicte
 # range(3, 6) is 3, 4, 5
 
 def Get_Ball_At_T(packet, prediction, time):
-	delta = packet.game_info.seconds_elapsed - prediction.slices[0].game_seconds
-	return prediction.slices[clamp(math.floor((delta + time) * 60), 0, prediction.num_slices - 1)]
+	start_pred = prediction.slices[0].game_seconds
+	current_time = packet.game_info.seconds_elapsed
+	delta = current_time - start_pred
+	slice_dt = 60 / (prediction.slices[60].game_seconds - start_pred)
+	slice = clamp(math.floor((delta + time) * slice_dt), 0, prediction.num_slices - 2)
+	s1 = prediction.slices[slice]
+	s2 = prediction.slices[slice + 1]
+	delta_slice = s2.game_seconds - s1.game_seconds
+	return Psuedo_Slice(Psuedo_Physics.lerp(s1.physics, s2.physics, (current_time + time - s1.game_seconds) / delta_slice), current_time + time)
 
 # Distance needed to change velocities (v_i -> v_f) using acceleration a
 def accel_dist(v_i, v_f, a): # vf^2 = vi^2 + 2*a*d  ->  d=(vf^2 - vi^2)/(2*a)

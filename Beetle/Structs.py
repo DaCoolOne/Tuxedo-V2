@@ -91,6 +91,9 @@ class Rotation():
 	def angle_to_vec(r, v):
 		return math.acos(Vec3.dot(Vec3(1, 0, 0).align_to(r), v.normal()))
 	
+	def copy(self):
+		return Rotation(self)
+	
 
 class Hitbox():
 	def __init__(self,_list):
@@ -121,6 +124,18 @@ class Psuedo_Physics():
 		self.velocity = velocity
 		self.rotation = rotation
 		self.angular_velocity = angular_velocity
+	
+	def lerp(p1, p2, s):
+		s2 = 1 - s
+		return Psuedo_Physics(
+			p1.location * s2 + p2.location * s,
+			p1.velocity * s2 + p2.velocity * s,
+			p1.rotation, # Todo: Figure out how to lerp rotations
+			p1.angular_velocity * s2 + p2.angular_velocity * s
+		)
+	
+	def cast(self, p):
+		return Psuedo_Physics(p.location.copy(), p.velocity.copy(), p.rotation.copy(), p.angular_velocity.copy())
 
 class LatestTouch():
 	def __init__(self, touch):
@@ -220,11 +235,21 @@ class Slice:
 		self.physics = Physics(s.physics)
 		self.game_seconds = s.game_seconds
 
+class Psuedo_Slice:
+	def __init__(self, physics, game_seconds):
+		self.physics = physics
+		self.game_seconds = game_seconds
+	
+	def cast(slice):
+		p = Psuedo_Physics.cast(slice.physics)
+		return Psuedo_Slice(p, slice.game_seconds)
+
+# Only take every third ball slice because it's faster
 class BallPrediction:
 	def __init__(self, prediction):
 		self.slices = []
-		self.num_slices = prediction.num_slices
-		for i in range(prediction.num_slices):
+		self.num_slices = int(prediction.num_slices / 3)
+		for i in range(0, prediction.num_slices, 3):
 			self.slices.append(Slice(prediction.slices[i]))
 	
 
