@@ -63,7 +63,7 @@ class Beetle(BaseAgent):
 		self.my_score = 0
 		self.other_score = 0
 		self.toxic_quick_chat = [QuickChats.Reactions_Okay, QuickChats.Apologies_Cursing, QuickChats.Custom_Compliments_TinyChances, QuickChats.Reactions_Okay]
-		self.toxic_quick_chat_2 = [QuickChats.Compliments_WhatASave, QuickChats.Compliments_NiceBlock, QuickChats.Reactions_Wow, QuickChats.PostGame_Gg, QuickChats.Custom_Toxic_WasteCPU, QuickChats.Custom_Toxic_GitGut, QuickChats.Custom_Toxic_DeAlloc, QuickChats.Custom_Toxic_404NoSkill, QuickChats.Custom_Toxic_CatchViru, QuickChats.Compliments_GreatPass]
+		self.toxic_quick_chat_2 = [QuickChats.Compliments_WhatASave, QuickChats.Compliments_NiceBlock, QuickChats.Reactions_Wow, QuickChats.PostGame_Gg, QuickChats.Custom_Toxic_WasteCPU, QuickChats.Custom_Toxic_GitGut, QuickChats.Custom_Toxic_DeAlloc, QuickChats.Custom_Toxic_404NoSkill, QuickChats.Custom_Toxic_CatchVirus, QuickChats.Compliments_GreatPass]
 		# self.communication_queue = 
 	
 	def Preprocessing(self, gtp: GameTickPacket):
