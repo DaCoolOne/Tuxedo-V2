@@ -8,6 +8,12 @@ from Structs import *
 
 boost_accel = 991.66
 
+# Got this function online
+def float_range(start, stop, step):
+	while start < stop:
+		yield float(start)
+		start += step
+
 def pos(p):
 	return p.physics.location
 
@@ -45,10 +51,11 @@ def correct(target, val, mult = 1):
 	return (rad * mult)
 
 # Projects into the future given a time, acceleration, and initial physics.
-def project_future(packet, phys, t, a = None):
+def project_future(packet, phys, t, a = None, gravity = True):
 	if a is None:
 		a = Vec3()
-	a.z = a.z + packet.game_info.world_gravity_z
+	if gravity:
+		a.z = a.z + packet.game_info.world_gravity_z
 	return Psuedo_Physics(
 		velocity = a * t + phys.velocity,
 		location = a * (t * t) + phys.velocity * t + phys.location,
@@ -203,7 +210,7 @@ class ArcTurn:
 
 # Rough approximator for if a point is in bounds. Used by Line_Arc_Line class
 def point_in_bounds(point):
-	return (abs(point.x) < 3996 and abs(point.y) < 5020) or (abs(point.x) < 793 and abs(point.y) < 5420)
+	return (abs(point.x) < 3996 and abs(point.y) < 5020) or (abs(point.x) < 750 and abs(point.y) < 5220)
 
 class Line_Arc_Line:
 	# offset represents line 1
@@ -961,7 +968,76 @@ class Hit_Package:
 	def from_list(_list, game_time):
 		return Hit_Package(Simple_Hit_Prediction.from_numpy(_list[0], game_time), Touch.from_numpy(_list[1]), Touch.from_numpy(_list[2]), Touch.from_numpy(_list[3]))
 
+class Path_Hit:
+	def __init__(self, drive_path, time):
+		self.drive_path = drive_path
+		self.time = time
 
+class Path_Vec:
+	def get(self, agent, packet, ball):
+		raise NotImplementedError
+
+class Shot_On_Goal(Path_Vec):
+	def get(self, agent, packet, ball):
+		target_vec = (ball.location - agent.field_info.opponent_goal.location)
+		target_vec_2 = (ball.location - agent.field_info.opponent_goal.closest_point(ball.location))
+		t_v = target_vec_2.copy()
+		t_v.y *= 0.3
+		lerp_val = clamp((2000 - t_v.length()) / 2100, 0, 1)
+		attack_vec = (target_vec_2 * lerp_val + target_vec * (1 - lerp_val)).normal(400 + ball.location.z * 2)
+		return attack_vec
+
+class Shot_In_Direction(Path_Vec):
+	def __init__(self, vector):
+		self.vec = vector * -1
+	
+	def get(self, agent, packet, ball):
+		return self.vec * (400 + ball.location.z * 2)
+
+class Shot_To_Side(Path_Vec):
+	def get(self, agent, packet, ball):
+		vec = packet.game_cars[agent.index].physics.location - ball.location
+		return Vec3(vec.x, 0, 0).normal(400 + ball.location.z * 2)
+
+# Calculates the vector needed to hit a shot
+def calc_path(path_vec, agent, packet):
+	
+	my_car = packet.game_cars[agent.index]
+	current_t = packet.game_info.seconds_elapsed
+	
+	target_t = -1
+	drive_path = None
+	for i in range(agent.ball_prediction.num_slices):
+		s = agent.ball_prediction.slices[i]
+		ball = s.physics
+		if ball.location.z < 265 and calc_hit(my_car, ball.location).time < s.game_seconds - current_t:
+			attack_vec = path_vec.get(agent, packet, ball)
+			dp = Line_Arc_Line(my_car, ball.location + attack_vec.normal(140), attack_vec)
+			if not dp.valid or not dp.check_in_bounds():
+				continue
+			drive_path = dp
+			target_t = s.game_seconds - current_t
+			if drive_path.calc_time() < target_t:
+				break
+	
+	# Extra refining
+	if not drive_path is None:
+		i = target_t - 0.05
+		while i < target_t:
+			ball = Get_Ball_At_T(packet, agent.ball_prediction, i).physics
+			if ball.location.z < 265 and calc_hit(my_car, ball.location).time < i - current_t:
+				attack_vec = path_vec.get(agent, packet, ball)
+				dp = Line_Arc_Line(my_car, ball.location + attack_vec.normal(140), attack_vec)
+				if not dp.valid or not dp.check_in_bounds():
+					continue
+				drive_path = dp
+				target_t = i - current_t
+				if drive_path.calc_time() < target_t:
+					break
+			i += 0.01
+	
+	return Path_Hit(drive_path, target_t)
+	
 
 
 

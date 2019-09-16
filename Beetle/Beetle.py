@@ -50,7 +50,7 @@ class Beetle(BaseAgent):
 		self.getting_boost = False
 		self.was_active = False
 		self.taking_shot = False
-		self.state = Test_Drive_Goal() # Defend()
+		self.state = Defend()
 		self.touch_type = TouchType.ground
 		self.dribble_tracker = Dribble_Tracker(self)
 		self.hit = None
@@ -74,7 +74,7 @@ class Beetle(BaseAgent):
 		if not self.was_active and self.packet.game_info.is_kickoff_pause:
 			self.maneuver = Kickoff(self, self.packet)
 			self.maneuver_complete = False
-			self.state = Test_Drive_Goal() # Defend()
+			self.state = Defend()
 		
 		self.was_active = self.packet.game_info.is_round_active
 		

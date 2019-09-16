@@ -150,7 +150,6 @@ class Maneuver_Jump_Shot(Maneuver):
 				self.jumpTimerMax = self.delay - 0.2
 				#self.angleTimer = clamp(self.jumpTimerMax / 4, 0.1, 0.15)
 			self.angleTimer = self.delay - 0.1
-		self.jumped = False
 		self.jumpTimer = 0
 	
 	def update(self,agent, packet):
@@ -160,34 +159,32 @@ class Maneuver_Jump_Shot(Maneuver):
 		controller_state.boost = False
 		car = packet.game_cars[agent.index]
 		position = car.physics.location
-		if not self.jumped:
-			self.jumped = True
+		
+		# jumpTimer = age
+		
+		if age < self.angleTimer:
+			project_car = project_future(packet, car.physics, self.delay - age)
+			Align_Car_To(agent, packet,(self.target-project_car.location).normal(), Vec3(0, 0, 1))
+		
+		if age < self.jumpTimerMax:
 			controller_state.jump = True
 		else:
-			#jumpTimer = age
-			
-			if age < self.angleTimer:
-				project_car = project_future(packet, car.physics, self.delay - age)
-				Align_Car_To(agent, packet,(self.target-project_car.location).normal(), Vec3(0, 0, 1))
-			
-			if age < self.jumpTimerMax:
-				controller_state.jump = True
-			else:
-				if age >= self.jumpTimerMax:
-					if age >= self.delay - 0.2 and age < self.delay - 0.15:
-						controller_state.jump = False
-					elif age >= self.delay - 0.15 and age < self.delay:
-						vec = self.target - car.physics.location
-						direction = vec.align_from(car.physics.rotation).normal()
-						agent.controller_state.jump = True
-						agent.controller_state.pitch = -direction.x
-						agent.controller_state.roll = direction.y
-						agent.controller_state.yaw = 0
-					elif age < self.delay + 0.1:
-						controller_state.jump = False
-					else:
-						controller_state.jump = False
-						return True
+			if age >= self.jumpTimerMax:
+				if age >= self.delay - 0.2 and age < self.delay - 0.15:
+					controller_state.jump = False
+				elif age >= self.delay - 0.15 and age < self.delay:
+					vec = self.target - car.physics.location
+					direction = vec.align_from(car.physics.rotation).normal()
+					agent.controller_state.jump = True
+					agent.controller_state.pitch = -direction.x
+					agent.controller_state.roll = direction.y
+					agent.controller_state.yaw = 0
+				elif age < self.delay + 0.1:
+					controller_state.jump = False
+				else:
+					controller_state.jump = False
+					# Wait an extra half second so that the recovery mode doesn't activate until the flip is finished.
+					return age > self.jumpTimerMax + 0.5
 		return False
 
 class Maneuver_Flick(Maneuver):
@@ -330,7 +327,7 @@ def drive(agent, packet, target_loc, time_allotted, target_v=-1, min_straight_sp
 	car_to_loc_3d = target_loc.flatten() - car_p
 	car_to_loc = car_to_loc_3d.flatten() # - car_dir * 40
 	target_speed = car_to_loc.length() / max(0.001, time_allotted) #TODO: Handle divide by zero
-	current_speed = car_v.length() * sign(Vec3.dot(car_to_loc, car_dir))
+	current_speed = car_v.length() * sign(Vec3.dot(car_v, car_dir))
 	
 	#delta_speed = (target_speed - current_speed) * 0.01 - 0.1
 	speed_err = current_speed - target_speed # >0 -> bot going too fast
@@ -347,19 +344,27 @@ def drive(agent, packet, target_loc, time_allotted, target_v=-1, min_straight_sp
 	cs.steer = steer_for_heading_err(heading_err)
 	cs.handbrake = car_v.length() > 500 and (max_turn > arc_turn.radius or (arc_turn.arc_length / car_v.length() > time_allotted and heading_err_deg_abs > 60) and time_allotted > 0.2) and on_ground and car_v.dot(car_dir) > 0
 	
-	if target_speed < min_straight_spd and heading_err_deg_abs < 10:
-		cs.throttle = 0.0
-		cs.boost = False
-	elif speed_err > 0:
-		if speed_err > 10:
-			cs.throttle = 0.0
-		else:
-			cs.throttle = 0.02
-		cs.boost = False
-	else: # <0
-		cs.throttle = 1 #constrain(-speed_err * 0.01 - 0.1)
-		should_boost = current_speed < 2275 and (always_boost or speed_err < (-500 / max(0.05, time_allotted)) or (current_speed > 1410 and speed_err < -1))
-		cs.boost = should_boost and not cs.handbrake
+	# if target_speed < min_straight_spd and heading_err_deg_abs < 10:
+		# cs.throttle = 0.0
+		# cs.boost = False
+	# elif speed_err > 0:
+		# if speed_err > 30:
+			# cs.throttle = 0.0
+		# else:
+			# cs.throttle = 0.02
+		# cs.boost = False
+	# else: # <0
+		# cs.throttle = 1 #constrain(-speed_err * 0.01 - 0.1)
+		# should_boost = current_speed < 2275 and (always_boost or speed_err < (-500 / max(0.05, time_allotted)) or (current_speed > 1410 and speed_err < -1))
+		# cs.boost = should_boost and not cs.handbrake
+	
+	if abs(speed_err) < 20:
+		cs.throttle = 0.1
+	else:
+		cs.throttle = -speed_err * 0.02
+	
+	should_boost = current_speed < 2275 and (always_boost or speed_err < -500 / max(0.05, time_allotted) or (current_speed > 1410 and speed_err < -200))
+	cs.boost = should_boost and not cs.handbrake
 	
 	dist_until_brake = car_to_loc.length() - brake_dist(car_v.length(), target_v) - (2.0 * car_v.length() * (1.0 / 60.0))
 	if target_v != -1 and car_v.length() > target_v - 10 and dist_until_brake < 0: # brake
@@ -771,7 +776,158 @@ class Maneuver_Aerial(Maneuver):
 		return delta_v(my_car.physics, ball.physics.location + self.offset, self.delta_t, packet.game_info.world_gravity_z)
 	
 
-
+# Drives Beetle on an line-arc-line path
+class Line_Arc_Line_Driver(Maneuver):
+	
+	def __init__(self, agent, packet, line_arc_line, do_flip = True, execute_time = -1):
+		self.line_arc_line = line_arc_line
+		if execute_time < 0:
+			self.execute_time = line_arc_line.calc_time()
+		else:
+			self.execute_time = execute_time
+		self.stage = 0
+		self.p_time = packet.game_info.seconds_elapsed
+		self.p_car_v = 1000
+		self.do_flip = do_flip
+		
+		# Used to make sure ball doesn't move
+		self.predicted_ball_loc = Get_Ball_At_T(packet, agent.ball_prediction, self.execute_time).physics.location
+	
+	def update(self, agent, packet):
+		
+		render_star(agent, self.predicted_ball_loc, agent.renderer.yellow())
+		
+		delta = packet.game_info.seconds_elapsed - self.p_time
+		self.p_time = packet.game_info.seconds_elapsed
+		
+		self.execute_time -= delta
+		
+		if self.execute_time < 0:
+			return True
+		
+		if self.line_arc_line.valid:
+			self.line_arc_line.render(agent)
+		else:
+			return True
+		
+		agent.controller_state.handbrake = False
+		
+		if self.stage == 1:
+			
+			my_car = packet.game_cars[agent.index]
+			
+			car_v = my_car.physics.velocity.length()
+			
+			a = (car_v - self.p_car_v) * delta
+			
+			phys = project_future(packet, my_car.physics, delta * 2)
+			
+			vector = Vec2.cast(phys.location) - self.line_arc_line.arc_center
+			vector2 = Vec2.cast(my_car.physics.location) - self.line_arc_line.arc_center
+			
+			# off = (vector.length() - self.line_arc_line.arc_radius) * 0.05
+			
+			ang = vector.inflate().angle_between(self.line_arc_line.a2.inflate())
+			ang2 = vector2.inflate().angle_between(self.line_arc_line.a2.inflate())
+			if self.line_arc_line.offset.dot(vector) < 0:
+				ang = math.pi * 2 - ang
+				ang2 = math.pi * 2 - ang2
+			
+			arc_dir = self.line_arc_line.arc_dir
+			
+			if sign(ang) != sign(arc_dir):
+				ang *= -1
+			
+			# self.line_arc_line.arc_dir
+			
+			a = self.line_arc_line.a2.angle() + ang - arc_dir * 0.4
+			p = self.line_arc_line.arc_center + Vec2(math.cos(a) * self.line_arc_line.arc_radius, math.sin(a) * self.line_arc_line.arc_radius)
+			car_to_loc_3d = p.inflate() - phys.location
+			
+			heading_err = correction(my_car, car_to_loc_3d)
+			agent.controller_state.steer = -heading_err * abs(heading_err) * 20
+			
+			agent.renderer.draw_string_3d((my_car.physics.location + Vec3(0, 0, 1000)).UI_Vec3(), 2, 2, str(int(math.degrees(ang))), agent.renderer.yellow())
+			
+			# s_mag = 1 / (self.line_arc_line.arc_radius * curvature(car_v)) + constrain(off) * 0.5
+			# agent.controller_state.steer = constrain(s_mag * -sign(correction(my_car, self.line_arc_line.p2.inflate() - my_car.physics.location)))
+			
+			render_star(agent, p.inflate(20), agent.renderer.blue(), 50)
+			
+			target_v = (ang2 * self.line_arc_line.arc_radius + self.line_arc_line.offset.length()) / self.execute_time
+			
+			agent.controller_state.throttle = (target_v - car_v + 50) * 0.03
+			if abs(agent.controller_state.throttle) < 0.2:
+				agent.controller_state.throttle = 0.1
+			
+			agent.controller_state.boost = car_v + 100 < target_v and target_v > 700
+			
+			# Transition into final part once we are facing the right direction
+			if (self.line_arc_line.offset).normal(-1).dot(Vec3(1, 0, 0).align_to(my_car.physics.rotation)) > 0.99:
+				self.stage += 1
+			
+			self.p_car_v = car_v
+			
+		else:
+			p = self.line_arc_line.p1 if self.stage == 0 else self.line_arc_line.target
+			
+			my_car = packet.game_cars[agent.index]
+			car_to_loc_3d = p.inflate() - my_car.physics.location
+			
+			car_v = my_car.physics.velocity.length()
+			
+			if self.stage == 0:
+				target_v = (car_to_loc_3d.length() + self.line_arc_line.arc_length + self.line_arc_line.offset.length()) / self.execute_time
+			else:
+				target_v = car_to_loc_3d.length() / self.execute_time
+			
+			heading_err = correction(my_car, car_to_loc_3d)
+			
+			agent.controller_state.steer = steer_for_heading_err(heading_err)
+			agent.controller_state.throttle = (target_v - car_v + 50) * 0.02
+			if abs(agent.controller_state.throttle) < 0.2:
+				agent.controller_state.throttle = 0.1
+			
+			agent.controller_state.boost = car_v + 100 < target_v and target_v > 700
+			
+			agent.controller_state.handbrake = abs(heading_err) > math.pi * 0.5 and car_v > 500 and abs(my_car.physics.angular_velocity.z) < 5
+			
+			if car_to_loc_3d.length() < car_v * delta * 2 + 50:
+				self.stage += 1
+			
+			self.p_car_v = car_v
+		
+		# Check to make sure the shot is still valid
+		ball = Get_Ball_At_T(packet, agent.ball_prediction, self.execute_time).physics
+		
+		# Path needs to be abandoned, ball has moved
+		if (ball.location - self.predicted_ball_loc).length() > 50:
+			return True
+		
+		# Jump shot stuff
+		ball_offset = 93
+		angle = abs(math.degrees(my_car.physics.rotation.angle_to_vec(ball.location.flatten())))
+		car_offset = agent.hitbox.get_offset_by_angle(angle)
+		total_offset = car_offset+ball_offset
+		
+		targetDistance = abs((my_car.physics.location- ball.location).length())
+		speed = clamp(abs(my_car.physics.velocity.length()),0.001,2300)
+		
+		up_v = Vec3(0, 0, 1).align_to(my_car.physics.rotation)
+		
+		# Project car into the future
+		future_car = project_future(packet, 
+			project_future(packet, Psuedo_Physics(location=my_car.physics.location,velocity=my_car.physics.velocity+up_v*300), min(self.execute_time, 0.2), up_v * 1400, gravity = False),
+		max(0, self.execute_time - 0.2))
+		
+		render_star(agent, future_car.location, agent.renderer.purple())
+		
+		# if speed * self.execute_time < clamp(targetDistance - total_offset,0,99999) and self.execute_time < 1 and self.stage == 2:
+		if future_car.location.z < ball.location.z and self.execute_time < 1 and self.stage == 2 and self.do_flip:
+			agent.maneuver = Maneuver_Jump_Shot(agent, packet, self.execute_time, ball.location)
+		
+		return False
+	
 
 
 
