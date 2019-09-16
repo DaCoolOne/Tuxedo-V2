@@ -33,53 +33,6 @@ class Carry_Ball(State):
 		if agent.packet.game_ball.physics.location.z < 120 or (agent.packet.game_ball.physics.location - my_car.physics.location).length() > 200 or not my_car.has_wheel_contact:
 			return Defend()
 
-# Todo: Re-vamp this class
-class Jumpshot_Handler(State):
-	def output(self,agent,packet,perfect_world = False):
-		enemyGoal = Vec3(0, 5200 * -sign(agent.team), 100)
-		myGoal = Vec3(0, 5200 * sign(agent.team), 100)
-		touch = agent.touch
-		my_car = packet.game_cars[agent.index]
-		rotator = my_car.physics.rotation
-		car_location = my_car.physics.location
-		grounded,on_wall = grounded_and_wall_check(agent,packet)
-		targetDistance = abs((car_location- touch.location).length())
-		shot_limit = 1
-		
-		ball_offset = 93
-		angle = abs(math.degrees(rotator.angle_to_vec(touch.location.flatten())))
-		car_offset = agent.hitbox.get_offset_by_angle(angle)
-		total_offset = car_offset+ball_offset
-		
-		
-		if not perfect_world:
-			total_offset*=.75
-		
-		if abs((car_location- myGoal).length()) < 2500:
-			direction = (touch.location.flatten() - myGoal.flatten()).normal()
-			ideal_position = touch.location-(direction*total_offset)
-		
-		else:
-			direction = (enemyGoal.flatten() - touch.location.flatten()).normal()
-			ideal_position = touch.location - (direction * total_offset)
-		
-		bad_position = touch.location + (direction * total_offset)
-		
-		targetDistance = abs((car_location- touch.location).length())
-		agent.controller_state = drive(agent, packet, ideal_position.flatten(),touch.time)
-		if grounded and not on_wall:
-			futurePos = car_location + my_car.physics.velocity * agent.delta
-			if touch.time < shot_limit:
-				if abs((futurePos-ideal_position).length()) < abs((futurePos-bad_position).length()):
-					speed = clamp(abs(my_car.physics.velocity.length()),0.001,2300)
-					if speed * touch.time >= clamp(targetDistance -total_offset,0,99999):
-						agent.maneuver = Maneuver_Jump_Shot(agent, packet, touch.time, touch.location)
-						agent.maneuver_complete = False
-						return Defend()
-		
-
-
-
 class Defend(State):
 	def __init__(self):
 		self.carry_timer = 0
@@ -103,11 +56,14 @@ class Defend(State):
 		
 		my_goal = agent.field_info.my_goal
 		
-		if agent.field_info.my_goal.direction.dot((packet.game_ball.physics.location - my_car.physics.location).normal()) < -0.1 and (abs(dest.x) < 1200 or dest.y * my_goal.direction.y > -4000):
-			dest += Vec3(200 * sign(my_car.physics.location.x - packet.game_ball.physics.location.x), -agent.field_info.my_goal.direction.y * 500, 0)
-			agent.controller_state = drive(agent, packet, dest, touch.time - 0.2, allow_flips=True)
-		else:
-			agent.controller_state = drive(agent, packet, dest, touch.time, allow_flips=True)
+		# if agent.field_info.my_goal.direction.dot((packet.game_ball.physics.location - my_car.physics.location).normal()) < -0.1 and (abs(dest.x) < 1200 or dest.y * my_goal.direction.y > -4000):
+			# dest += Vec3(200 * sign(my_car.physics.location.x - packet.game_ball.physics.location.x), -agent.field_info.my_goal.direction.y * 500, 0)
+			# agent.controller_state = drive(agent, packet, dest, touch.time - 0.2, allow_flips=True)
+		# else:
+			# agent.controller_state = drive(agent, packet, dest, touch.time, allow_flips=True)
+		
+		JumpShot_Handler(agent, packet)
+		
 		# tried to shoehorn jumpshot in here, failed epicly
 		# if agent.touch.location.z > 120 and agent.touch.location.z <= 265:
 		# 	return Jumpshot_Handler().output(agent,packet,perfect_world = False)
@@ -134,22 +90,21 @@ class Defend(State):
 			self.carry_timer += agent.delta
 			if self.carry_timer > 1:
 				return Carry_Ball()
-		elif agent.touch_type == TouchType.flip and touch.time < hit.hit_time and touch.time < 2:
-			return Jumpshot_Handler()
+		# elif agent.touch_type == TouchType.flip and touch.time < hit.hit_time and touch.time < 2:
+			# return Jumpshot_Handler()
 		elif any((agent.team != car.team and car.has_dribble) for car in packet.game_cars):
 			self.carry_timer = 0
 		elif (d_p_v < math.pi * 0.4 and d_p_v_2 < math.pi * 0.3 and touch.time < hit.hit_time - 0.5 and b_g_o_len < 6000):
 			return Take_Shot()
-		# For testing puposes only for now. Want to test aerials.
 		elif agent.touch_type == TouchType.aerial and touch.is_garunteed and touch.time > 1 and touch.location.z > 300:
 			if my_goal.direction.dot(my_car.physics.location - touch.location) > 0.0:
-				return Align_For_Aerial(agent, packet, touch.time, my_goal.direction * -90 + Vec3(sign(my_car.physics.location.x - touch.location.x) * 40, 0, -80))
+				return Align_For_Aerial(agent, packet, my_goal.direction * -90 + Vec3(sign(my_car.physics.location.x - touch.location.x) * 40, 0, -80))
 			else:
-				return Align_For_Aerial(agent, packet, touch.time, my_goal.direction * -100 + Vec3(0, 0, 80))
+				return Align_For_Aerial(agent, packet, my_goal.direction * -100 + Vec3(0, 0, -80))
 		elif bTOGT == -1 and sign(packet.game_ball.physics.velocity.y) == sign(my_goal.direction.y) and b_g_len > 6000 and abs(packet.game_ball.physics.velocity.y) > 100:
 			# return Defend()
 			self.carry_timer = 0
-		elif my_car.boost < 70 and touch.time > 1 and pad_grab_time < (hit.hit_time + (hit.hit_position - my_goal.location).length() / max(1, hit.hit_velocity * 1.5)) and (pad_grab_time < bTOGT or bTOGT == -1):
+		elif my_car.boost < 70 and touch.time > 1.5 and pad_grab_time < (hit.hit_time + (hit.hit_position - my_goal.location).length() / max(1, hit.hit_velocity * 1.75)) and (pad_grab_time < bTOGT or bTOGT == -1) and touch.time < hit.hit_time + 2:
 			return Grab_Boost()
 		else:
 			self.carry_timer = 0
@@ -260,7 +215,7 @@ class Take_Shot(State):
 		if d_p_v > math.pi * 0.5 or d_p_v_2 > math.pi * 0.4 or b_g_o_len > 6000 or not touch.is_garunteed:
 			return Defend()
 		elif agent.touch_type == TouchType.aerial and touch.time > 1 and touch.location.z > 300:
-			return Align_For_Aerial(agent, packet, touch.time, (touch.location - agent.field_info.opponent_goal.location.flatten()).normal(130))
+			return Align_For_Aerial(agent, packet, (touch.location - agent.field_info.opponent_goal.location.flatten()).normal(130))
 		
 
 class Grab_Boost(State):
@@ -283,17 +238,18 @@ class Grab_Boost(State):
 
 # Sets up for an aerial.
 class Align_For_Aerial(State):
-	def __init__(self, agent, packet, ball_time, offset):
+	def __init__(self, agent, packet, offset):
 		# Aerial offset for rough targeting purposes
 		self.offset = offset
-		self.time = ball_time
 		self.p_time = packet.game_info.seconds_elapsed
 	
 	def output(self, agent, packet):
 		
+		touch = agent.hit_package.air_touch
+		self.time = touch.time
+		
 		delta = packet.game_info.seconds_elapsed - self.p_time
 		self.p_time = packet.game_info.seconds_elapsed
-		self.time -= delta
 		
 		car = packet.game_cars[agent.index]
 		location = Get_Ball_At_T(packet, agent.ball_prediction, self.time).physics.location
@@ -310,7 +266,7 @@ class Align_For_Aerial(State):
 			return Defend()
 		
 		# Abort conditions
-		if self.time < 0.9 or location.z < 300:
+		if self.time < 0.7 or location.z < 265:
 			return Defend()
 		
 	

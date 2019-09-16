@@ -181,6 +181,11 @@ class Boost():
 		self.is_active = boost.is_active
 		self.time = boost.timer
 
+class Team():
+	def __init__(self, team):
+		self.team_index = team.team_index
+		self.score = team.score
+
 class Packet():
 	def __init__(self, packet):
 		self.game_ball = Ball(packet.game_ball)
@@ -191,6 +196,9 @@ class Packet():
 		self.game_boosts = []
 		for i in range(packet.num_boost):
 			self.game_boosts.append(Boost(packet.game_boosts[i]))
+		self.teams = []
+		for i in range(packet.num_teams):
+			self.teams.append(Team(packet.teams[i]))
 	
 
 class GoalInfo():

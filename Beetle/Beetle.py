@@ -1,10 +1,12 @@
 import math
 import os
 import time
+import random
 from multiprocessing import Manager, Queue
 
 from rlbot.agents.base_agent import BaseAgent
 from rlbot.utils.structures.game_data_struct import GameTickPacket
+from rlbot.utils.structures.quick_chats import QuickChats
 from rlbot.botmanager.helper_process_request import HelperProcessRequest
 
 from Structs import *
@@ -58,12 +60,18 @@ class Beetle(BaseAgent):
 		self.field_info = FieldInfo(self, self.get_field_info())
 		self.hit_package = None
 		self.hitbox = None
+		self.my_score = 0
+		self.other_score = 0
+		self.toxic_quick_chat = [QuickChats.Reactions_Okay, QuickChats.Apologies_Cursing, QuickChats.Custom_Compliments_TinyChances, QuickChats.Reactions_Okay]
+		self.toxic_quick_chat_2 = [QuickChats.Compliments_WhatASave, QuickChats.Compliments_NiceBlock, QuickChats.Reactions_Wow, QuickChats.PostGame_Gg, QuickChats.Custom_Toxic_WasteCPU, QuickChats.Custom_Toxic_GitGut, QuickChats.Custom_Toxic_DeAlloc, QuickChats.Custom_Toxic_404NoSkill, QuickChats.Custom_Toxic_CatchViru, QuickChats.Compliments_GreatPass]
 		# self.communication_queue = 
 	
 	def Preprocessing(self, gtp: GameTickPacket):
 		self.packet = Packet(gtp)
+		
 		if self.hitbox == None:
-			self.hitbox = Hitbox(gtp.game_cars[self.index].hitbox)
+			self.hitbox = self.packet.game_cars[self.index].hitbox
+		
 		self.ball_prediction = BallPrediction(self.get_ball_prediction_struct())
 		
 		self.delta = self.packet.game_info.seconds_elapsed - self.p_time
@@ -71,12 +79,27 @@ class Beetle(BaseAgent):
 		
 		self.dribble_tracker.set_packet(self.packet)
 		
-		if not self.was_active and self.packet.game_info.is_kickoff_pause:
+		o_score = self.other_score
+		m_score = self.my_score
+		self.other_score = 0
+		for team in self.packet.teams:
+			if team.team_index == self.index:
+				self.my_score = team.score
+			else:
+				self.other_score += team.score
+		
+		# Reset condition, spam quick chat
+		if o_score + m_score != self.other_score + self.my_score:
 			self.maneuver = Kickoff(self, self.packet)
 			self.maneuver_complete = False
 			self.state = Defend()
+			
+			t = self.toxic_quick_chat_2 if m_score != self.my_score else self.toxic_quick_chat
+			for i in range(4):
+				self.send_quick_chat(False, random.choice(t))
 		
 		self.was_active = self.packet.game_info.is_round_active
+		
 		
 	
 	def get_helper_process_request(self):

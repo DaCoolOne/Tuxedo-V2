@@ -306,8 +306,7 @@ class Line_Arc_Line:
 		
 	
 	def calc_hit(self):
-		t = Time_to_Pos((self.start - self.p1).length() + (self.arc_length), self.car.physics.velocity.length(), self.car.boost)
-		t.time += self.offset.length() / t.velocity
+		t = Time_to_Pos((self.start - self.p1).length() + self.arc_length + self.offset.length(), self.car.physics.velocity.length(), self.car.boost)
 		return t
 	
 	def calc_time(self):
@@ -537,6 +536,9 @@ class Touch:
 	
 	def from_numpy(n):
 		return Touch(n[0], Vec3(n[1], n[2], n[3]), n[4], n[5])
+	
+	def copy(self):
+		return Touch(self.time, self.location, self.is_garunteed, self.can_save)
 
 # Determines time for car to hit a position on the ground.
 def calc_hit(car, position, minimum = False):
@@ -564,7 +566,7 @@ def calc_hit(car, position, minimum = False):
 	
 	# Calculate the time to get to the position
 	turn_time = turn / max(500, car_vel_len)
-	drive_time = Time_to_Pos(max(0.01, len - 150), car_vel_len, car.boost) if car_face.dot(car_vel) > 0.0 else Time_To_Pos_No_Boost(max(0.01, (len - 200)), car_vel_len)
+	drive_time = Time_to_Pos(max(0.01, len - 120), car_vel_len, car.boost) if car_face.dot(car_vel) > 0.0 else Time_To_Pos_No_Boost(max(0.01, (len - 200)), car_vel_len)
 	
 	drive_time.time += turn_time # + air_time
 	
@@ -690,13 +692,20 @@ class Hit_Prediction():
 		goal_pos.z = min(goal_pos.z, max_height)
 		goal_pos.x = clamp_abs(self.hit_position.x, 650)
 		
-		if self.hit_time > 0.25:
-			goal_vec = (goal_pos - self.hit_position)
-			shot_vec = goal_vec.normal(self.hit_velocity * 1.5)
-		else:
-			# Todo, move this vector based on the direction of the other car.
-			v = self.hit_position - self.hit_car.physics.location
-			shot_vec = v.normal(self.hit_velocity * 1.5)
+		# if self.hit_time > 0.25:
+		goal_vec = (goal_pos - self.hit_position)
+		shot_vec = goal_vec.normal(self.hit_velocity * 1.5)
+		# else:
+			
+			# goal_vec = (goal_pos - self.hit_position)
+			# goal_vec_2 = (goal_pos - self.hit_position + Vec3(1000, 0, 0))
+			# v = self.hit_position - self.hit_car.physics.location
+			
+			# if goal_vec.angle_between(v) > goal_vec.angle_between(goal_vec_2):
+				# shot_vec = goal_vec.normal(self.hit_velocity * 1.5)
+			# else:
+				# shot_vec = v.normal(self.hit_velocity)
+			
 		
 		for i in range(self.prediction.num_slices):
 			slice = self.prediction.slices[i]
@@ -706,7 +715,7 @@ class Hit_Prediction():
 			t = slice.game_seconds - current_time
 			if loc.z > 265:
 				air_hit = self.calc_air(packet, car, loc, slice.game_seconds - current_time, packet.game_info.world_gravity_z)
-				if (air_hit.velocity.length() < 1000 and t < car.boost * 0.033 and loc.z < max_height) or i >= self.prediction.num_slices - 3 or abs(loc.y) > 5120:
+				if (air_hit.velocity.length() < 700 and t < car.boost * 0.033 and loc.z < max_height) or i >= self.prediction.num_slices - 3 or abs(loc.y) > 5120:
 					return Touch(t, loc, t <= self.hit_time, abs(loc.y) < 5120)
 			else:
 				#car_strike_loc = get_car_strike_loc(loc, packet, car)
