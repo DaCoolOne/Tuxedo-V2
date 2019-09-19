@@ -304,7 +304,7 @@ def Align_Car_To(self, packet, vector: Vec3, up = Vec3(0, 0, 0)):
 	
 	self.controller_state.steer = constrain(yaw)
 
-def drive(agent, packet, target_loc, time_allotted, target_v=-1, min_straight_spd=0, always_boost=False, allow_flips=False):
+def drive(agent, packet, target_loc, time_allotted, target_v=-1, min_straight_spd=0, always_boost=False, allow_flips=True):
 	target_loc = target_loc.copy()
 	
 	car = packet.game_cars[agent.index]
@@ -342,7 +342,7 @@ def drive(agent, packet, target_loc, time_allotted, target_v=-1, min_straight_sp
 	
 	cs = MyControllerState()
 	cs.steer = steer_for_heading_err(heading_err)
-	cs.handbrake = car_v.length() > 500 and (max_turn > arc_turn.radius or (arc_turn.arc_length / car_v.length() > time_allotted and heading_err_deg_abs > 60) and time_allotted > 0.2) and on_ground and car_v.dot(car_dir) > 0
+	cs.handbrake = car_v.length() > 500 and (max_turn > arc_turn.radius or (car_to_loc.length() / car_v.length() > time_allotted and heading_err_deg_abs > 60) and time_allotted > 0.2) and on_ground and car_v.dot(car_dir) > 0
 	
 	# if target_speed < min_straight_spd and heading_err_deg_abs < 10:
 		# cs.throttle = 0.0
@@ -578,14 +578,13 @@ class Line_Arc_Line_Driver(Maneuver):
 		up_v = Vec3(0, 0, 1).align_to(my_car.physics.rotation)
 		
 		# Project car into the future
-		future_car = project_future(packet, 
-			project_future(packet, Psuedo_Physics(location=my_car.physics.location,velocity=my_car.physics.velocity+up_v*300), min(self.execute_time, 0.2), up_v * 1400, gravity = False),
-		max(0, self.execute_time - 0.2))
+		sub_step = project_future(packet, Psuedo_Physics(location=my_car.physics.location,velocity=my_car.physics.velocity+up_v*300), min(self.execute_time, 0.2), up_v * 1400)
+		future_car = project_future(packet, sub_step, max(0, self.execute_time - 0.2))
 		
 		render_star(agent, future_car.location, agent.renderer.purple())
 		
 		# if speed * self.execute_time < clamp(targetDistance - total_offset,0,99999) and self.execute_time < 1 and self.stage == 2:
-		if future_car.location.z < ball.location.z and self.execute_time < 1 and self.stage == 2 and self.do_flip:
+		if future_car.location.z < ball.location.z and self.execute_time < 0.9 and self.stage == 2 and self.do_flip:
 			agent.maneuver = Maneuver_Jump_Shot(agent, packet, self.execute_time, ball.location)
 		
 		return False
@@ -697,9 +696,9 @@ class Kickoff():
 			local_car_to_ball = car_to_ball.align_from(my_car.physics.rotation)
 			
 			if car_to_ball.length() < vel(my_car).length() * 0.5:
-				agent.controller_state = drive(agent, packet, ball_pos, 0.05)
+				agent.controller_state = drive(agent, packet, ball_pos, 0.05, allow_flips = False)
 			else:
-				agent.controller_state = drive(agent, packet, ball_pos_real, 0.05)
+				agent.controller_state = drive(agent, packet, ball_pos_real, 0.05, allow_flips = False)
 			
 			agent.controller_state.throttle = 1.0
 			agent.controller_state.boost = (not self.jumped or vel(my_car).z > 10) and not self.wave_dashed
@@ -750,6 +749,8 @@ class Kickoff():
 # Todo: Re-vamp this
 def JumpShot_Handler(agent,packet,perfect_world = False):
 	
+	hit = agent.hit
+	
 	rolling = abs(packet.game_ball.physics.velocity.z) < 400 and packet.game_ball.physics.location.z < 200
 	
 	enemyGoal = Vec3(0, 5200 * -sign(agent.team), 100)
@@ -763,7 +764,7 @@ def JumpShot_Handler(agent,packet,perfect_world = False):
 	car_location = my_car.physics.location
 	grounded,on_wall = grounded_and_wall_check(agent,packet)
 	targetDistance = abs((car_location- touch.location).length())
-	shot_limit = 1
+	shot_limit = 0.9
 	
 	ball_offset = 93
 	angle = abs(math.degrees(rotator.angle_to_vec(touch.location.flatten())))
@@ -787,8 +788,8 @@ def JumpShot_Handler(agent,packet,perfect_world = False):
 	
 	# Refine the touch
 	i = touch.time - 0.1
-	while i < touch.time + 0.1:
-		ball = Get_Ball_At_T(packet, agent.ball_prediction, i).physics
+	while i < touch.time + 0.2:
+		ball = hit.ball_at_t(agent, packet, agent.ball_prediction, i, max_height = 256).physics
 		t = Time_to_Pos((ball.location - my_car.physics.location - direction * total_offset).length(), my_car.physics.velocity.length(), my_car.boost)
 		if t.time < i:
 			touch.time = i
@@ -798,16 +799,16 @@ def JumpShot_Handler(agent,packet,perfect_world = False):
 		i += 0.02
 	
 	targetDistance = abs((car_location- touch.location).length())
-	agent.controller_state = drive(agent, packet, ideal_position.flatten(),touch.time)
+	agent.controller_state = drive(agent, packet, ideal_position.flatten(),min(1.5, touch.time - 0.05), allow_flips=True)
 	
 	if grounded and not on_wall:
 		up_v = Vec3(0, 0, 1).align_to(my_car.physics.rotation)
-		future_car = project_future(packet, 
-			project_future(packet, Psuedo_Physics(location=my_car.physics.location,velocity=my_car.physics.velocity+up_v*300), min(touch.time, 0.2), up_v * 1400),
-		max(0, touch.time - 0.2))
+		sub_step = project_future(packet, Psuedo_Physics(location=my_car.physics.location,velocity=my_car.physics.velocity+up_v*300), min(touch.time, 0.2), up_v * 1400)
+		future_car = project_future(packet, sub_step, max(0, touch.time - 0.2))
 		futurePos = future_car.location
 		if touch.time < shot_limit:
-			if abs((futurePos-ideal_position).flatten().length()) < abs((futurePos-bad_position).flatten().length()) and (futurePos-touch.location).flatten().length() < total_offset * 1.25 and agent.hit.hit_time - touch.time > -0.1:
+			# abs((futurePos-ideal_position).flatten().length()) < abs((futurePos-bad_position).flatten().length())
+			if (futurePos-touch.location).flatten().length() < total_offset * 1.25 and agent.hit.hit_time - touch.time > -0.25 and futurePos.z < touch.location.z:
 				agent.maneuver = Maneuver_Jump_Shot(agent, packet, touch.time, touch.location)
 				agent.maneuver_complete = False
 	
@@ -879,18 +880,18 @@ class Aerial_Takeoff(Maneuver):
 		# Single tap jump button for one frame
 		self.quick = False
 		
-		if dv_quick_len < target_dv and dv_quick.dot(car_face) > 0:
+		if dv_quick_len < target_dv * 0.7 and dv_quick.normal().dot(car_face) > 0.5:
 			self.approx_dv = dv_quick
 			self.quick = True
 			self.double_jump = False
 			self.use_boost = False
 			
-		elif dv_s_len < target_dv and dv_single.dot(car_face) > 0:
+		elif dv_s_len < target_dv * 0.8 and dv_single.normal().dot(car_face) > 0.5:
 			self.approx_dv = dv_single
 			self.double_jump = False
 			self.use_boost = True
 			
-		elif dv_sf_len < target_dv and dv_fast_single.dot(car_face) > 0:
+		elif dv_sf_len < target_dv * 0.9 and dv_fast_single.normal().dot(car_face) > 0.5:
 			self.approx_dv = dv_fast_single
 			self.double_jump = False
 			self.use_boost = True

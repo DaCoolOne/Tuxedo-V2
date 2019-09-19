@@ -85,6 +85,8 @@ class Defend(State):
 		
 		pad_grab_time = calc_hit(my_car, agent.field_info.full_boosts[c_boost].location).time + Time_to_Pos((agent.field_info.full_boosts[c_boost].location - my_goal.location).length(), 0, 100).time if c_boost >= 0 else 10000
 		
+		pad_grab_time_2 = calc_hit(my_car, agent.field_info.full_boosts[c_boost].location).time + Time_to_Pos((agent.field_info.full_boosts[c_boost].location - touch.location).length(), 0, 100).time if c_boost >= 0 else 10000
+		
 		# We keep our own dribble timer in order to be more restrictive than the dribble tracker.
 		if abs(160 - ball.location.z) < 30 and (ball.location - my_car.physics.location).length() < 200:
 			self.carry_timer += agent.delta
@@ -104,7 +106,7 @@ class Defend(State):
 		elif bTOGT == -1 and sign(packet.game_ball.physics.velocity.y) == sign(my_goal.direction.y) and b_g_len > 6000 and abs(packet.game_ball.physics.velocity.y) > 100:
 			# return Defend()
 			self.carry_timer = 0
-		elif my_car.boost < 70 and touch.time > 1.5 and pad_grab_time < (hit.hit_time + (hit.hit_position - my_goal.location).length() / max(1, hit.hit_velocity * 1.75)) and (pad_grab_time < bTOGT or bTOGT == -1) and touch.time < hit.hit_time + 2:
+		elif my_car.boost < 70 and touch.time > 1 and (pad_grab_time < (hit.hit_time + (hit.hit_position - my_goal.location).length() / max(1, hit.hit_velocity * 1.75)) - 0.5 or pad_grab_time_2 < touch.time) and (pad_grab_time < bTOGT or bTOGT == -1) and touch.time < hit.hit_time + 2:
 			return Grab_Boost()
 		else:
 			self.carry_timer = 0

@@ -585,6 +585,9 @@ class Simple_Hit_Prediction:
 			self.hit_velocity = 0
 			self.hit_position = Vec3()
 	
+	def recalculate_time(self, game_time):
+		self.hit_time = self.hit_game_seconds - game_time
+	
 	def to_numpy(self):
 		n = np.zeros(5)
 		n[0] = self.hit_game_seconds
@@ -601,6 +604,21 @@ class Simple_Hit_Prediction:
 		s.hit_velocity = n[1]
 		s.hit_position = Vec3(n[2], n[3], n[4])
 		return s
+	
+	def ball_at_t(self, agent, packet, prediction, time, offset = None, max_height = 265):
+		if offset is None:
+			offset = Vec3()
+		
+		slice = Get_Ball_At_T(packet, prediction, min(time, self.hit_time))
+		
+		goal_pos = agent.field_info.my_goal.location
+		goal_pos.z = min(goal_pos.z, max_height)
+		goal_pos.x = clamp_abs(self.hit_position.x, 700)
+		
+		goal_vec = (goal_pos - self.hit_position)
+		shot_vec = goal_vec.normal(self.hit_velocity * 1.5)
+		
+		return (slice.physics.location if time < self.hit_time else self.physics.location + shot_vec * (time - self.time)) + offset
 
 # Predictions from this will be a little off. Need to make it take into account the change of position in the turn
 class Hit_Prediction():
@@ -690,7 +708,7 @@ class Hit_Prediction():
 		
 		goal_pos = agent.field_info.my_goal.location
 		goal_pos.z = min(goal_pos.z, max_height)
-		goal_pos.x = clamp_abs(self.hit_position.x, 650)
+		goal_pos.x = clamp_abs(self.hit_position.x, 700)
 		
 		# if self.hit_time > 0.25:
 		goal_vec = (goal_pos - self.hit_position)
@@ -992,7 +1010,7 @@ class Shot_On_Goal(Path_Vec):
 		target_vec_2 = (ball.location - agent.field_info.opponent_goal.closest_point(ball.location))
 		t_v = target_vec_2.copy()
 		t_v.y *= 0.3
-		lerp_val = clamp((2000 - t_v.length()) / 2100, 0, 1)
+		lerp_val = clamp((1000 - t_v.length()) / 1000, 0, 1)
 		attack_vec = (target_vec_2 * lerp_val + target_vec * (1 - lerp_val)).normal(400 + ball.location.z * 2)
 		return attack_vec
 

@@ -60,9 +60,9 @@ class Beetle(BaseAgent):
 		self.field_info = FieldInfo(self, self.get_field_info())
 		self.hit_package = None
 		self.hitbox = None
-		self.my_score = 0
+		self.my_score = -1
 		self.other_score = 0
-		self.toxic_quick_chat = [QuickChats.Reactions_Okay, QuickChats.Apologies_Cursing, QuickChats.Custom_Compliments_TinyChances, QuickChats.Reactions_Okay]
+		self.toxic_quick_chat = [QuickChats.Reactions_Okay, QuickChats.Apologies_Cursing, QuickChats.Reactions_Okay]
 		self.toxic_quick_chat_2 = [QuickChats.Compliments_WhatASave, QuickChats.Compliments_NiceBlock, QuickChats.Reactions_Wow, QuickChats.PostGame_Gg, QuickChats.Custom_Toxic_WasteCPU, QuickChats.Custom_Toxic_GitGut, QuickChats.Custom_Toxic_DeAlloc, QuickChats.Custom_Toxic_404NoSkill, QuickChats.Custom_Toxic_CatchVirus, QuickChats.Compliments_GreatPass]
 		# self.communication_queue = 
 	
@@ -134,6 +134,8 @@ class Beetle(BaseAgent):
 			# Update latest hits (Use while loop so that we always have latest data)
 			while not self.hit_prediction_queue.empty():
 				self.hit_package = Hit_Package.from_list(self.hit_prediction_queue.get(), self.p_time)
+			
+			self.hit_package.recalculate_time(self.p_time)
 		else:
 			hit = Hit_Prediction(self, self.packet)
 			touch1 = hit.get_earliest_touch(self, self.packet, my_car, 120, my_goal.direction * -30)
