@@ -557,7 +557,7 @@ def calc_hit(car, position, minimum = False):
 	
 	if minimum:
 		# Calculate that we don't need to turn the whole way to hit.
-		if len > 160:
+		if len > 200:
 			turn2 = math.acos(140 / len)
 			turn = max(0, turn - turn2)
 		else:
@@ -615,10 +615,10 @@ class Simple_Hit_Prediction:
 		goal_pos.z = min(goal_pos.z, max_height)
 		goal_pos.x = clamp_abs(self.hit_position.x, 700)
 		
-		goal_vec = (goal_pos - self.hit_position)
+		goal_vec = (goal_pos - slice.physics.location)
 		shot_vec = goal_vec.normal(self.hit_velocity * 1.5)
 		
-		return (slice.physics.location if time < self.hit_time else self.physics.location + shot_vec * (time - self.time)) + offset
+		return (slice.physics.location if time < self.hit_time else slice.physics.location + shot_vec * (time - self.hit_time)) + offset
 
 # Predictions from this will be a little off. Need to make it take into account the change of position in the turn
 class Hit_Prediction():
@@ -1011,7 +1011,7 @@ class Shot_On_Goal(Path_Vec):
 		t_v = target_vec_2.copy()
 		t_v.y *= 0.3
 		lerp_val = clamp((1000 - t_v.length()) / 1000, 0, 1)
-		attack_vec = (target_vec_2 * lerp_val + target_vec * (1 - lerp_val)).normal(400 + ball.location.z * 2)
+		attack_vec = (target_vec_2 * lerp_val + target_vec * (1 - lerp_val)).normal(200 + ball.location.z * 2)
 		return attack_vec
 
 class Shot_In_Direction(Path_Vec):
@@ -1019,12 +1019,12 @@ class Shot_In_Direction(Path_Vec):
 		self.vec = vector * -1
 	
 	def get(self, agent, packet, ball):
-		return self.vec * (400 + ball.location.z * 2)
+		return self.vec * (200 + ball.location.z * 2)
 
 class Shot_To_Side(Path_Vec):
 	def get(self, agent, packet, ball):
 		vec = packet.game_cars[agent.index].physics.location - ball.location
-		return Vec3(vec.x, 0, 0).normal(400 + ball.location.z * 2)
+		return Vec3(vec.x, 0, 0).normal(200 + ball.location.z * 2)
 
 # Calculates the vector needed to hit a shot
 def calc_path(path_vec, agent, packet):

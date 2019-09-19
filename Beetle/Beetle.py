@@ -100,7 +100,6 @@ class Beetle(BaseAgent):
 		
 		self.was_active = self.packet.game_info.is_round_active
 		
-		
 	
 	def get_helper_process_request(self):
 		if USE_HELPER_PROCESS:

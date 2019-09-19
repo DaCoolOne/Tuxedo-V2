@@ -47,7 +47,6 @@ class Defend(State):
 		render_star(agent, ball_loc_at_time(agent, packet, bTOGT), agent.renderer.red())
 		
 		ball_intercept_time = ball_past_y_time(agent, packet, 4850) #4970
-		render_star(agent, touch.location, agent.renderer.yellow())
 		
 		dest = touch.location.flatten()
 		
@@ -186,7 +185,7 @@ class Take_Shot(State):
 		my_car = packet.game_cars[agent.index]
 		touch = agent.touch
 		
-		if drive_path.drive_path is None or drive_path.time > agent.hit.hit_time:
+		if drive_path.drive_path is None or drive_path.time > agent.hit_package.flip_touch.time + 1 or drive_path.time > agent.hit.hit_time:
 			
 			my_goal = agent.field_info.my_goal
 			
