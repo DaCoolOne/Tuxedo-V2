@@ -60,7 +60,7 @@ class Beetle(BaseAgent):
 		self.field_info = FieldInfo(self, self.get_field_info())
 		self.hit_package = None
 		self.hitbox = None
-		self.my_score = -1
+		self.my_score = 0
 		self.other_score = 0
 		self.toxic_quick_chat = [QuickChats.Reactions_Okay, QuickChats.Apologies_Cursing, QuickChats.Reactions_Okay]
 		self.toxic_quick_chat_2 = [QuickChats.Compliments_WhatASave, QuickChats.Compliments_NiceBlock, QuickChats.Reactions_Wow, QuickChats.PostGame_Gg, QuickChats.Custom_Toxic_WasteCPU, QuickChats.Custom_Toxic_GitGut, QuickChats.Custom_Toxic_DeAlloc, QuickChats.Custom_Toxic_404NoSkill, QuickChats.Custom_Toxic_CatchVirus, QuickChats.Compliments_GreatPass]
@@ -90,13 +90,15 @@ class Beetle(BaseAgent):
 		
 		# Reset condition, spam quick chat
 		if o_score + m_score != self.other_score + self.my_score:
-			self.maneuver = Kickoff(self, self.packet)
-			self.maneuver_complete = False
-			self.state = Defend()
 			
 			t = self.toxic_quick_chat_2 if m_score != self.my_score else self.toxic_quick_chat
 			for i in range(4):
 				self.send_quick_chat(False, random.choice(t))
+		
+		if not self.packet.game_info.is_round_active:
+			self.maneuver = Kickoff(self, self.packet)
+			self.maneuver_complete = False
+			self.state = Defend()
 		
 		self.was_active = self.packet.game_info.is_round_active
 		

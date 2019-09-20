@@ -15,8 +15,18 @@ class Recovery(State):
 	def __init__(self, prev_state):
 		self.prev_state = prev_state
 	def output(self, agent, packet):
-		Align_Car_To(agent, packet, packet.game_cars[agent.index].physics.velocity.flatten(), Vec3(0, 0, 1))
+		car = packet.game_cars[agent.index]
+		
+		if car.physics.location.z > -car.physics.velocity.z:
+			vec = car.physics.velocity.flatten().normal() + Vec3(0, 0, -1)
+			Align_Car_To(agent, packet, vec, Vec3(0, 0, 1))
+			agent.controller_state.boost = Vec3(1, 0, 0).align_to(car.physics.rotation).dot(vec.normal()) > 0.9
+		else:
+			Align_Car_To(agent, packet, car.physics.velocity.flatten(), Vec3(0, 0, 1))
+		
+		
 		agent.controller_state.throttle = 1
+		
 		# Experimental
 		# touch = agent.touch
 		# if agent.touch_type == TouchType.aerial and touch.is_garunteed and not packet.game_cars[agent.index].has_wheel_contact:
@@ -105,7 +115,7 @@ class Defend(State):
 		elif bTOGT == -1 and sign(packet.game_ball.physics.velocity.y) == sign(my_goal.direction.y) and b_g_len > 6000 and abs(packet.game_ball.physics.velocity.y) > 100:
 			# return Defend()
 			self.carry_timer = 0
-		elif my_car.boost < 70 and touch.time > 1 and (pad_grab_time < (hit.hit_time + (hit.hit_position - my_goal.location).length() / max(1, hit.hit_velocity * 1.75)) - 0.5 or pad_grab_time_2 < touch.time) and (pad_grab_time < bTOGT or bTOGT == -1) and touch.time < hit.hit_time + 2:
+		elif my_car.boost < 70 and touch.time > 1 and ((pad_grab_time < (hit.hit_time + (hit.hit_position - my_goal.location).length() / max(1, hit.hit_velocity * 1.75)) - 0.5 and touch.time > hit.hit_time) or pad_grab_time_2 < touch.time) and (pad_grab_time < bTOGT or bTOGT == -1) and touch.time < hit.hit_time + 2:
 			return Grab_Boost()
 		else:
 			self.carry_timer = 0
@@ -185,15 +195,9 @@ class Take_Shot(State):
 		my_car = packet.game_cars[agent.index]
 		touch = agent.touch
 		
-		if drive_path.drive_path is None or drive_path.time > agent.hit_package.flip_touch.time + 1 or drive_path.time > agent.hit.hit_time:
+		if drive_path.drive_path is None or drive_path.time > agent.hit_package.flip_touch.time * 1.5 or drive_path.time > agent.hit.hit_time:
 			
-			my_goal = agent.field_info.my_goal
-			
-			b_g_o = (touch.location - agent.field_info.opponent_goal.location).flatten()
-			agent.controller_state = drive(agent, packet, touch.location.flatten() + b_g_o.normal(150), touch.time, allow_flips=True)
-			
-			if touch.time < 0.4:
-				Flip_To_Ball(agent, packet)
+			JumpShot_Handler(agent, packet)
 			
 		else:
 			self.driver = Line_Arc_Line_Driver(agent, packet, drive_path.drive_path, execute_time = drive_path.time)
