@@ -15,7 +15,7 @@ from Actions import *
 from States import *
 
 # Turn off in order fix hot reloads
-USE_HELPER_PROCESS = False
+USE_HELPER_PROCESS = True
 
 hit_prediction_queues = {}
 hit_prediction_managers = {}
@@ -132,11 +132,13 @@ class Beetle(BaseAgent):
 			while self.hit_package is None and self.hit_prediction_queue.empty():
 				time.sleep(0.05)
 			
+			if not self.hit_package is None:
+				self.hit_package.recalculate_time(self.p_time, self.delta)
+			
 			# Update latest hits (Use while loop so that we always have latest data)
 			while not self.hit_prediction_queue.empty():
 				self.hit_package = Hit_Package.from_list(self.hit_prediction_queue.get(), self.p_time)
 			
-			self.hit_package.recalculate_time(self.p_time)
 		else:
 			hit = Hit_Prediction(self, self.packet)
 			touch1 = hit.get_earliest_touch(self, self.packet, my_car, 120, my_goal.direction * -30)

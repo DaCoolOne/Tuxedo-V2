@@ -539,6 +539,9 @@ class Touch:
 	
 	def copy(self):
 		return Touch(self.time, self.location, self.is_garunteed, self.can_save)
+	
+	def recalculate_time(self, dt):
+		self.time -= dt
 
 # Determines time for car to hit a position on the ground.
 def calc_hit(car, position, minimum = False):
@@ -988,6 +991,12 @@ class Hit_Package:
 		self.ground_touch = ground_touch
 		self.flip_touch = flip_touch
 		self.air_touch = air_touch
+	
+	def recalculate_time(self, game_time, delta):
+		self.hit.recalculate_time(game_time)
+		self.ground_touch.recalculate_time(delta)
+		self.flip_touch.recalculate_time(delta)
+		self.air_touch.recalculate_time(delta)
 	
 	def to_list(self):
 		return [self.hit.to_numpy(), self.ground_touch.to_numpy(), self.flip_touch.to_numpy(), self.air_touch.to_numpy()]
