@@ -15,7 +15,7 @@ from Actions import *
 from States import *
 
 # Turn off in order fix hot reloads
-USE_HELPER_PROCESS = True
+USE_HELPER_PROCESS = False
 
 hit_prediction_queues = {}
 hit_prediction_managers = {}
@@ -48,7 +48,7 @@ class Beetle(BaseAgent):
 		self.ball_prediction = None
 		self.offensive_mode = 0 # Makes the bot offensive :P
 		self.maneuver_complete = True
-		self.maneuver: Maneuver = None
+		self.maneuver = Maneuver()
 		self.getting_boost = False
 		self.was_active = False
 		self.taking_shot = False
@@ -139,13 +139,15 @@ class Beetle(BaseAgent):
 			while not self.hit_prediction_queue.empty():
 				self.hit_package = Hit_Package.from_list(self.hit_prediction_queue.get(), self.p_time)
 			
-		else:
+		elif self.maneuver_complete or not self.hit_package or not self.maneuver.suspend_hit_prediction:
 			hit = Hit_Prediction(self, self.packet)
 			touch1 = hit.get_earliest_touch(self, self.packet, my_car, 120, my_goal.direction * -30)
 			touch2 = hit.get_earliest_touch(self, self.packet, my_car, 265, my_goal.direction * -40)
 			touch3 = hit.get_earliest_touch(self, self.packet, my_car)
 			
 			self.hit_package = Hit_Package(hit.get_simple(), touch1, touch2, touch3)
+		else:
+			self.hit_package.recalculate_time(self.p_time, self.delta)
 		
 		if not self.maneuver_complete:
 			self.maneuver_complete = self.maneuver.update(self, self.packet)

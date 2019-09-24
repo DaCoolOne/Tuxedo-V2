@@ -38,9 +38,31 @@ class Recovery(State):
 
 class Carry_Ball(State):
 	def output(self, agent, packet):
-		Dribble(agent, packet, agent.field_info.opponent_goal.location)
+		
+		bTOGT = ball_in_my_goal_time(agent, packet)
+		
+		touch = agent.hit_package.ground_touch
+		
+		current_time = packet.game_info.seconds_elapsed
+		
 		my_car = packet.game_cars[agent.index]
-		if agent.packet.game_ball.physics.location.z < 120 or (agent.packet.game_ball.physics.location - my_car.physics.location).length() > 200 or not my_car.has_wheel_contact:
+		cbl = (agent.packet.game_ball.physics.location - my_car.physics.location).length()
+		
+		if cbl < 200:
+			Dribble(agent, packet, agent.field_info.opponent_goal.location)
+			
+			if agent.hit.hit_time < 0.5:
+				Enter_Flick(agent, packet, (agent.field_info.opponent_goal.location - my_car.physics.location).normal())
+				return Defend()
+			
+		else:
+			agent.controller_state = drive(agent, packet, touch.location + Vec3(-10).align_to(my_car.physics.rotation), touch.time)
+			
+			if agent.hit_package.ground_touch.time > agent.hit.hit_time - 0.5:
+				return Defend()
+			
+		
+		if agent.packet.game_ball.physics.location.z < 120 or not my_car.has_wheel_contact or bTOGT != -1:
 			return Defend()
 
 class Defend(State):
@@ -96,15 +118,8 @@ class Defend(State):
 		
 		pad_grab_time_2 = calc_hit(my_car, agent.field_info.full_boosts[c_boost].location).time + Time_to_Pos((agent.field_info.full_boosts[c_boost].location - touch.location).length(), 0, 100).time if c_boost >= 0 else 10000
 		
-		# We keep our own dribble timer in order to be more restrictive than the dribble tracker.
-		if abs(160 - ball.location.z) < 30 and (ball.location - my_car.physics.location).length() < 200:
-			self.carry_timer += agent.delta
-			if self.carry_timer > 1:
-				return Carry_Ball()
-		# elif agent.touch_type == TouchType.flip and touch.time < hit.hit_time and touch.time < 2:
-			# return Jumpshot_Handler()
-		elif any((agent.team != car.team and car.has_dribble) for car in packet.game_cars):
-			self.carry_timer = 0
+		if agent.hit_package.ground_touch.time < hit.hit_time - 1 and agent.hit_package.ground_touch.time < 1.2 and ball.location.z > 120 and bTOGT == -1:
+			return Carry_Ball()
 		elif (d_p_v < math.pi * 0.4 and d_p_v_2 < math.pi * 0.3 and touch.time < hit.hit_time - 0.5 and b_g_o_len < 6000):
 			return Take_Shot()
 		elif agent.touch_type == TouchType.aerial and touch.is_garunteed and touch.time > 1 and touch.location.z > 300:
@@ -112,13 +127,8 @@ class Defend(State):
 				return Align_For_Aerial(agent, packet, my_goal.direction * -90 + Vec3(sign(my_car.physics.location.x - touch.location.x) * 40, 0, -80))
 			else:
 				return Align_For_Aerial(agent, packet, my_goal.direction * -100 + Vec3(0, 0, -80))
-		elif bTOGT == -1 and sign(packet.game_ball.physics.velocity.y) == sign(my_goal.direction.y) and b_g_len > 6000 and abs(packet.game_ball.physics.velocity.y) > 100:
-			# return Defend()
-			self.carry_timer = 0
 		elif my_car.boost < 70 and touch.time > 1 and ((pad_grab_time < (hit.hit_time + (hit.hit_position - my_goal.location).length() / max(1, hit.hit_velocity * 1.75)) - 0.5 and touch.time > hit.hit_time) or pad_grab_time_2 < touch.time) and (pad_grab_time < bTOGT or bTOGT == -1) and touch.time < hit.hit_time + 2:
 			return Grab_Boost()
-		else:
-			self.carry_timer = 0
 		
 
 class Wait_For_Shot(State):

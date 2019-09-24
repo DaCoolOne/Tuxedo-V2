@@ -964,6 +964,20 @@ def get_corner_boost_index(agent):
 	return max_i
 	
 
+def redirect_vect(v1, v2):
+	
+	# First vector must be flipped
+	v1 = v1 * -1
+	
+	# Normalize vectors
+	v1_n = v1.normal()
+	v2_n = v2.normal()
+	
+	# Reflection normal is the vector that points to the midline of these two normalized vectors
+	ref = v1_n + (v2_n - v1_n) * 0.5
+	
+	return ref.normal()
+
 # Keeps track of which cars are dribbling the ball
 class Dribble_Tracker:
 	def __init__(self, agent):
@@ -1074,8 +1088,6 @@ def calc_path(path_vec, agent, packet):
 	
 	return Path_Hit(drive_path, target_t)
 	
-
-
 
 
 
