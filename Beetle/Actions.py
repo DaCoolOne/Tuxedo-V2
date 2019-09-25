@@ -641,7 +641,7 @@ def Dribble(self, packet, position: Vec3):
 	car_to_p2 = (position_2 - car_pos)
 	dir_vec = car_to_p2
 	
-	angle = clamp(correction(my_car, dir_vec.normal()) * 3, -math.pi * 0.7, math.pi * 0.7)
+	angle = clamp(correction(my_car, dir_vec.normal()) * 1.3, -math.pi * 0.7, math.pi * 0.7)
 	
 	dir = Vec3(car_direction.y * math.sin(-angle) * 2 - car_direction.x * math.cos(-angle), -car_direction.y * math.cos(-angle) * 2 - car_direction.x * math.sin(-angle), 0.0)
 	
@@ -650,7 +650,7 @@ def Dribble(self, packet, position: Vec3):
 	if Vec3(car_pos.x - ball_pos.x, car_pos.y - ball_pos.y, 0.0).length() < 250.0 and abs(ball_vel.z) < 400.0 and ball_predict.location.z < 250.0:
 		multiplier = 1
 	
-	position = ball_pos + dir * multiplier * 30
+	position = ball_pos + dir * multiplier * 25
 	
 	position.z *= 0.2
 	
@@ -668,9 +668,9 @@ def Dribble(self, packet, position: Vec3):
 		self.controller_state.throttle = -constrain(car_to_pos.length() / 10 + 0.2)
 		self.controller_state.steer = - self.controller_state.steer
 	
-	if abs(self.controller_state.throttle) < 0.05:
+	if abs(self.controller_state.throttle) < 0.1:
 		self.controller_state.throttle = 0.02
-	elif self.controller_state.throttle > -0.2:
+	elif self.controller_state.throttle < 0 and self.controller_state.throttle > -0.2:
 		self.controller_state.throttle = 0
 	
 	if car_to_pos.length() > 300.0:
