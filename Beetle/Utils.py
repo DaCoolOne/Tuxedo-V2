@@ -948,14 +948,14 @@ def get_corner_boost_index(agent):
 	
 	my_car = agent.packet.game_cars[agent.index]
 	
-	s = sign(clamp_abs(my_car.physics.location.y, 4000) - agent.field_info.my_goal.location.y)
+	s = sign(clamp_abs(my_car.physics.location.y, 5000) - agent.field_info.my_goal.location.y)
 	s2 = sign(my_car.physics.location.x + my_car.physics.velocity.x * 0.5)
 	
 	max_l = 0
 	max_i = -1
 	
 	for i, boost in enumerate(agent.field_info.full_boosts):
-		if sign(clamp_abs(my_car.physics.location.y, 4000) - boost.location.y) == s and sign(boost.location.x) == s2 and agent.packet.game_boosts[boost.index].is_active:
+		if sign(clamp_abs(my_car.physics.location.y + max(0, my_car.physics.velocity.y * s) * s, 5000) - boost.location.y + s * (100 - my_car.boost) * 10) == s and sign(boost.location.x) == s2 and agent.packet.game_boosts[boost.index].is_active:
 			if (boost.location.y - agent.field_info.my_goal.location.y) * s > max_l:
 				max_i = i
 				max_l = (boost.location.y - agent.field_info.my_goal.location.y) * s

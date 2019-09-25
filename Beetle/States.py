@@ -215,7 +215,7 @@ class Take_Shot(State):
 			
 			car_to_p1 = (drive_path.drive_path.p1 - my_car.physics.location).inflate()
 			
-			if Vec3(1, 0, 0).align_to(my_car.physics.rotation).dot(car_to_p1.normal()) > 0.95 and car_to_p1.length() < 700:
+			if Vec3(1, 0, 0).align_to(my_car.physics.rotation).dot(car_to_p1.normal()) > 0.95 and car_to_p1.length() < 1000:
 				agent.maneuver_complete = False
 				agent.maneuver = self.driver
 			
