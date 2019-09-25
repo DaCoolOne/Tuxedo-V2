@@ -48,15 +48,17 @@ class Carry_Ball(State):
 		my_car = packet.game_cars[agent.index]
 		cbl = (agent.packet.game_ball.physics.location - my_car.physics.location).length()
 		
-		if cbl < 200:
+		if cbl < 250:
 			Dribble(agent, packet, agent.field_info.opponent_goal.location)
 			
-			if agent.hit.hit_time < 0.5:
+			if agent.hit.hit_time < 0.6:
 				Enter_Flick(agent, packet, (agent.field_info.opponent_goal.location - my_car.physics.location).normal())
 				return Defend()
 			
 		else:
-			agent.controller_state = drive(agent, packet, touch.location + Vec3(-10).align_to(my_car.physics.rotation), touch.time)
+			bounce = self.next_bounce(agent, packet)
+			
+			agent.controller_state = drive(agent, packet, bounce.physics.location, bounce.game_seconds - packet.game_info.seconds_elapsed, sensitive_boost = True)
 			
 			if agent.hit_package.ground_touch.time > agent.hit.hit_time - 0.5:
 				return Defend()
@@ -64,6 +66,11 @@ class Carry_Ball(State):
 		
 		if agent.packet.game_ball.physics.location.z < 120 or not my_car.has_wheel_contact or bTOGT != -1:
 			return Defend()
+	
+	def next_bounce(self, agent, packet):
+		for slice in agent.ball_prediction.slices:
+			if slice.physics.location.z < 150 and slice.game_seconds > packet.game_info.seconds_elapsed:
+				return slice
 
 class Defend(State):
 	def __init__(self):
@@ -93,7 +100,22 @@ class Defend(State):
 		# else:
 			# agent.controller_state = drive(agent, packet, dest, touch.time, allow_flips=True)
 		
-		JumpShot_Handler(agent, packet)
+		if (dest - my_car.physics.location).dot(agent.field_info.my_goal.direction) > 0:
+			JumpShot_Handler(agent, packet)
+		else:
+			drive_path = calc_path(Shot_On_Goal(), agent, packet)
+			if drive_path.drive_path is None or drive_path.time > agent.hit_package.flip_touch.time or drive_path.time > agent.hit.hit_time or (Vec2.cast(agent.field_info.my_goal.location) - drive_path.drive_path.target).length() < 1500:
+				JumpShot_Handler(agent, packet)
+			else:
+				self.driver = Line_Arc_Line_Driver(agent, packet, drive_path.drive_path, execute_time = drive_path.time)
+				self.driver.update(agent, packet)
+				
+				car_to_p1 = (drive_path.drive_path.p1 - my_car.physics.location).inflate()
+				
+				if Vec3(1, 0, 0).align_to(my_car.physics.rotation).dot(car_to_p1.normal()) > 0.95 and car_to_p1.length() < 1000:
+					agent.maneuver_complete = False
+					agent.maneuver = self.driver
+			
 		
 		# tried to shoehorn jumpshot in here, failed epicly
 		# if agent.touch.location.z > 120 and agent.touch.location.z <= 265:
@@ -205,7 +227,7 @@ class Take_Shot(State):
 		my_car = packet.game_cars[agent.index]
 		touch = agent.touch
 		
-		if drive_path.drive_path is None or drive_path.time > agent.hit_package.flip_touch.time * 1.5 or drive_path.time > agent.hit.hit_time:
+		if drive_path.drive_path is None or drive_path.time > agent.hit_package.flip_touch.time or drive_path.time > agent.hit.hit_time:
 			
 			JumpShot_Handler(agent, packet)
 			
@@ -261,7 +283,7 @@ class Align_For_Aerial(State):
 	def output(self, agent, packet):
 		
 		touch = agent.hit_package.air_touch
-		self.time = touch.time
+		self.time = touch.time + 0.2
 		
 		delta = packet.game_info.seconds_elapsed - self.p_time
 		self.p_time = packet.game_info.seconds_elapsed

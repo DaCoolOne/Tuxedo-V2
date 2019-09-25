@@ -233,7 +233,7 @@ class Line_Arc_Line:
 			self.valid = False
 			return
 		
-		self.arc_radius = turn_radius(v_upper) * 1.1 # Add a slight multiplier so that the cars can properly navigate the arc
+		self.arc_radius = turn_radius(v_upper) * 1.05 # Add a slight multiplier so that the cars can properly navigate the arc
 		
 		cp = self.offset.normal(self.arc_radius).rot90()
 		
@@ -306,7 +306,18 @@ class Line_Arc_Line:
 		
 	
 	def calc_hit(self):
-		t = Time_to_Pos((self.start - self.p1).length() + self.arc_length + self.offset.length(), self.car.physics.velocity.length(), self.car.boost)
+		my_car_vel = self.car.physics.velocity.length()
+		total_length = (self.start - self.p1).length() + self.arc_length + self.offset.length()
+		t = Time_to_Pos(total_length, my_car_vel, self.car.boost)
+		t2 = Time_to_Vel(my_car_vel, self.vel.velocity, self.car.boost)
+		if t2.time < t.time:
+			max_speed = bin_search_time(boost_acceleration, t2.time)
+			
+			len_at_max = total_length - max_speed.position
+			t.time = t2.time + len_at_max / max(0.01, t2.velocity)
+			
+			t.velocity = t2.velocity
+			
 		return t
 	
 	def calc_time(self):
@@ -454,6 +465,47 @@ def Time_to_Pos(len, v, boost):
 		
 		# Easy
 		return Hit(end.time - start.time + extra, end.velocity)
+	
+
+def Time_To_Vel_No_Boost(vel, v):
+	# Get start "time"
+	start = bin_search_velocity(acceleration, v)
+	
+	# Calculate the end time
+	end = bin_search_velocity(acceleration, vel)
+	
+	# Wow, that was easy :P
+	return Hit(end.time - start.time, end.velocity)
+
+boost_consumption = 1/33
+# Returns the ammount of time needed for a car to travel a length given a boost ammount and an initial velocity
+def Time_to_Vel(vel, v, boost):
+	t_until_no_boost = boost * boost_consumption
+	
+	# First, assume unlimited boost
+	
+	# Get start "time"
+	start = bin_search_velocity(boost_acceleration, v)
+	
+	# Calculate the end time
+	end = bin_search_position(boost_acceleration, vel)
+	
+	# Okay, now let's look at whether we run out of boost. :P
+	if end.time - start.time > t_until_no_boost:
+		# Oof, okay, let's evaluate our velocity when we run out of boost
+		no_boost = bin_search_time(boost_acceleration, start.time + t_until_no_boost)
+		if no_boost.velocity > max_car_vel:
+			# Easy
+			return Hit(end.time - start.time, end.velocity)
+		else:
+			# Okay, so the car will now be accelerating for a bit. Fortunately, we already have a function for this, so we'll just...
+			hit = Time_To_Vel_No_Boost(start.velocity + vel - no_boost.velocity, no_boost.velocity)
+			hit.time += no_boost.time - start.time
+			return hit
+		
+	else:
+		# Easy
+		return Hit(end.time - start.time, end.velocity)
 	
 
 # Needs to be updated to account for added throttle acceleration when < 1410uu
@@ -682,7 +734,7 @@ class Hit_Prediction():
 		renderer.draw_line_3d(poly[len(poly) - 1], self.hit_position.UI_Vec3(), c)
 	
 	# Designed for aerials. Calculates the delta v to hit a location at a time.
-	def calc_air(self, packet, car, position, time, grav_z):
+	def calc_air(self, packet, car, position, time, grav_z, leniency = False):
 		car_up = Vec3(0, 0, 1).align_to(car.physics.rotation)
 		
 		# More accurate simulation of the jump
@@ -697,7 +749,7 @@ class Hit_Prediction():
 		
 		dv = delta_v(phys, position, max(0.0001, time), grav_z)
 		
-		if dv.length() > 1000:
+		if dv.length() > 1000 or (leniency and dv.length() >= 700):
 			phys.velocity += car_up * 300
 			dv = delta_v(phys, position, max(0.0001, time), grav_z)
 		
@@ -1034,7 +1086,7 @@ class Shot_On_Goal(Path_Vec):
 		t_v = target_vec_2.copy()
 		t_v.y *= 0.3
 		lerp_val = clamp((1000 - t_v.length()) / 1000, 0, 1)
-		attack_vec = (target_vec_2 * lerp_val + target_vec * (1 - lerp_val)).normal(200 + ball.location.z * 2)
+		attack_vec = (target_vec_2 * lerp_val + target_vec * (1 - lerp_val)).normal(-100 + ball.location.z * 4)
 		return attack_vec
 
 class Shot_In_Direction(Path_Vec):
@@ -1042,12 +1094,12 @@ class Shot_In_Direction(Path_Vec):
 		self.vec = vector * -1
 	
 	def get(self, agent, packet, ball):
-		return self.vec * (200 + ball.location.z * 2)
+		return self.vec * (-100 + ball.location.z * 4)
 
 class Shot_To_Side(Path_Vec):
 	def get(self, agent, packet, ball):
 		vec = packet.game_cars[agent.index].physics.location - ball.location
-		return Vec3(vec.x, 0, 0).normal(200 + ball.location.z * 2)
+		return Vec3(sign(vec.x), -agent.field_info.my_goal.direction.y * 0.1, 0).normal(-100 + ball.location.z * 4)
 
 # Calculates the vector needed to hit a shot
 def calc_path(path_vec, agent, packet):
