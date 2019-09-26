@@ -213,19 +213,19 @@ class Maneuver_Flick(Maneuver):
 	
 	def update(self, agent, packet):
 		dt = packet.game_info.seconds_elapsed - self.start_time
-		if dt < 0.3:
+		if dt < 0.2:
 			# Jump into air
 			agent.controller_state.jump = True
 			agent.controller_state.throttle = 0
-			agent.controller_state.pitch = 1 # Pitch the nose back for the flick (experimental)
-		elif dt < 0.35:
+			agent.controller_state.pitch = -1
+		elif dt < 0.225:
 			# Pause
 			agent.controller_state.jump = False
 			agent.controller_state.throttle = 0
 		elif not self.has_flipped:
 			# Perform the flip
 			agent_car = packet.game_cars[agent.index]
-			self.direction = (agent_car.physics.location - packet.game_ball.physics.location).align_from(agent_car.physics.rotation)
+			# self.direction = (agent_car.physics.location - packet.game_ball.physics.location).align_from(agent_car.physics.rotation)
 			
 			self.direction.y = self.direction.y * 0.5
 			self.direction = self.direction.flatten().normal()
@@ -626,35 +626,35 @@ def Dribble(self, packet, position: Vec3):
 	
 	my_car = packet.game_cars[self.index]
 	
-	car_pos = my_car.physics.location + Vec3(5).align_to(my_car.physics.rotation)
+	car_pos = my_car.physics.location + Vec3(22).align_to(my_car.physics.rotation)
 	
 	car_direction = Vec3(1, 0, 0).align_to(my_car.physics.rotation)
 	
 	ball_vel = packet.game_ball.physics.velocity
-	ball_pos = packet.game_ball.physics.location + ball_vel * 0.17
+	ball_pos = packet.game_ball.physics.location + ball_vel * 0.15
 	
 	ball_predict = Get_Ball_At_T(packet, prediction, 0.5).physics
 	
-	if Vec3(car_pos.x - ball_pos.x, car_pos.y - ball_pos.y, 0).flatten().length() > 500 or ball_pos.z - car_pos.z > 400:
-		ball_pos = ball_predict.location
+	# if Vec3(car_pos.x - ball_pos.x, car_pos.y - ball_pos.y, 0).flatten().length() > 500 or ball_pos.z - car_pos.z > 400:
+		# ball_pos = ball_predict.location
 	
-	car_to_p2 = (position_2 - car_pos)
-	dir_vec = car_to_p2
+	car_to_p2 = (position_2 - car_pos).normal(1200)
+	dir_vec = (car_to_p2 - ball_vel) * 0.03
 	
-	angle = clamp(correction(my_car, dir_vec.normal()) * 1.3, -math.pi * 0.7, math.pi * 0.7)
+	angle = clamp(correction(my_car, dir_vec.normal()), -math.pi * 0.7, math.pi * 0.7)
 	
-	dir = Vec3(car_direction.y * math.sin(-angle) * 2 - car_direction.x * math.cos(-angle), -car_direction.y * math.cos(-angle) * 2 - car_direction.x * math.sin(-angle), 0.0)
+	dir = Vec3(car_direction.y * math.sin(-angle) * 2.3 - car_direction.x * math.cos(-angle), -car_direction.y * math.cos(-angle) * 2.3 - car_direction.x * math.sin(-angle), 0.0)
 	
 	multiplier = 0.5
 	
 	if Vec3(car_pos.x - ball_pos.x, car_pos.y - ball_pos.y, 0.0).length() < 250.0 and abs(ball_vel.z) < 400.0 and ball_predict.location.z < 250.0:
 		multiplier = 1
 	
-	position = ball_pos + dir * multiplier * 30
+	position = ball_pos + dir * multiplier * min(27, dir_vec.length())
 	
 	position.z *= 0.2
 	
-	car_vel = vel(my_car) * 0.15
+	car_vel = my_car.physics.velocity * 0.15
 	
 	car_to_pos = position - car_pos - car_vel
 	

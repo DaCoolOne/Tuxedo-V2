@@ -53,8 +53,10 @@ class Carry_Ball(State):
 			
 			car_to_goal = (agent.field_info.opponent_goal.location - my_car.physics.location)
 			
-			if agent.hit.hit_time < 0.8 or (car_to_goal.length() < 5000 or Vec3(1, 0, 0).align_to(my_car.physics.rotation).dot(car_to_goal.flatten().normal()) > 0.9):
-				Enter_Flick(agent, packet, car_to_goal)
+			car_in_range = any(((car.physics.location + car.physics.velocity * 0.3 - my_car.physics.location - my_car.physics.velocity * 0.3).length() < 400 and car.team != agent.team and not car.is_demolished) for car in packet.game_cars)
+			
+			if car_in_range or (car_to_goal.length() < my_car.physics.velocity.length() * 3 and Vec3(1, 0, 0).align_to(my_car.physics.rotation).dot(car_to_goal.flatten().normal()) > 0.9):
+				Enter_Flick(agent, packet, Vec3(-1, 0))
 				return Defend()
 			
 		else:
