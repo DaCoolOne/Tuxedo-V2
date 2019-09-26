@@ -2,8 +2,6 @@
 import os
 import sys
 
-import time
-
 from rlbot.utils.structures.game_interface import GameInterface
 from rlbot.utils.structures.game_data_struct import GameTickPacket, FieldInfoPacket
 from rlbot.utils.structures.ball_prediction_struct import BallPrediction as RLBotBallPrediction

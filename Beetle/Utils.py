@@ -414,24 +414,24 @@ def bin_search_position(arr, val, s=0, e=-1):
 		return bin_search_position(arr, val, div, e)
 
 # Arguments are passed in as scalars for convienience sake.
-# Returns the ammount of time needed to drive a distance (len) giving a starting velocity (v) assuming no boost used.
+# Returns the ammount of time needed to drive a distance (length) giving a starting velocity (v) assuming no boost used.
 # Uses the above velocity and position tables.
-def Time_To_Pos_No_Boost(len, v):
+def Time_To_Pos_No_Boost(length, v):
 	# Get start "time"
 	start = bin_search_velocity(acceleration, v)
 	
 	# Calculate the end time
-	end = bin_search_position(acceleration, start.position + len)
+	end = bin_search_position(acceleration, start.position + length)
 	
 	# Add on some additional time for additional length traveled at max speed.
-	extra = max(0, start.position + len - end.position) / max(0.01, end.velocity)
+	extra = max(0, start.position + length - end.position) / max(0.01, end.velocity)
 	
 	# Wow, that was easy :P
 	return Hit(end.time - start.time + extra, end.velocity)
 
 boost_consumption = 1/33
 # Returns the ammount of time needed for a car to travel a length given a boost ammount and an initial velocity
-def Time_to_Pos(len, v, boost):
+def Time_to_Pos(length, v, boost):
 	t_until_no_boost = boost * boost_consumption
 	
 	# First, assume unlimited boost
@@ -440,7 +440,7 @@ def Time_to_Pos(len, v, boost):
 	start = bin_search_velocity(boost_acceleration, v)
 	
 	# Calculate the end time
-	end = bin_search_position(boost_acceleration, start.position + len)
+	end = bin_search_position(boost_acceleration, start.position + length)
 	
 	# Okay, now let's look at whether we run out of boost. :P
 	if end.time - start.time > t_until_no_boost:
@@ -448,20 +448,20 @@ def Time_to_Pos(len, v, boost):
 		no_boost = bin_search_time(boost_acceleration, start.time + t_until_no_boost)
 		if no_boost.velocity > max_car_vel:
 			# While technically there is a slight deceleration force applied to the car, for simplicity's sake we will simply assume that the car maintains its current speed
-			extra = max(0, start.position + len - no_boost.position) / max(0.01, no_boost.velocity)
+			extra = max(0, start.position + length - no_boost.position) / max(0.01, no_boost.velocity)
 			
 			# Easy
 			return Hit(end.time - start.time + extra, end.velocity)
 		else:
 			# Okay, so the car will now be accelerating for a bit. Fortunately, we already have a function for this, so we'll just...
-			hit = Time_To_Pos_No_Boost(start.position + len - no_boost.position, no_boost.velocity)
+			hit = Time_To_Pos_No_Boost(start.position + length - no_boost.position, no_boost.velocity)
 			hit.time += no_boost.time - start.time
 			return hit
 		
 	else:
 		
 		# Add on some additional time for additional length traveled at max speed.
-		extra = max(0, start.position + len - end.position) / max(0.01, end.velocity)
+		extra = max(0, start.position + length - end.position) / max(0.01, end.velocity)
 		
 		# Easy
 		return Hit(end.time - start.time + extra, end.velocity)
@@ -508,67 +508,6 @@ def Time_to_Vel(vel, v, boost):
 		return Hit(end.time - start.time, end.velocity)
 	
 
-# Needs to be updated to account for added throttle acceleration when < 1410uu
-def Time_to_Pos_Old(car, position, velocity, no_correction = False):
-	car_to_pos = position - car.physics.location
-	
-	# Subtract 100 from the length because we contact the ball slightly sooner than we reach the point
-	len = max(0, car_to_pos.length() - 200)
-	v_len = velocity.length() # * Vec3.dot(car_to_pos.normal(), vel.normal())
-	
-	# curve:
-	# f(t) = 0.5 * boost_accel * t ^ 2 + velocity * t
-	
-	# Analysis of t:
-	# Solve for t when f(t) = len
-	# Zeros of t: let c = len
-	# 0.5 * boost_accel * t ^ 2 + velocity * t - len = 0
-	
-	# t = ( -velocity + sqrt(velocity^2 - 4(boost_accel)(-len)) ) / ( 2 * (boost_accel) )
-	
-	accel_time = (-v_len + math.sqrt(v_len * v_len + 4 * boost_accel * len)) / (2 * boost_accel)
-	
-	# However, the car speed maxes out at 2300 uu, so we need to account for that by stopping acceleration at 2300 uu. To do this we
-	# calculate when we hit 2300 uu and cancel out any acceleration that happens after that
-	
-	# f(t) = 0.5 * boost_accel * t ^ 2 + velocity * t
-	# Derivative:
-	# v(t) = boost_accel * t + velocity
-	# Solve for t when v(t) = 2300
-	# 2300 = boost_accel * t + velocity
-	# 2300 - velocity = boost_accel * t
-	# ( 2300 - velocity ) / boost_accel = t
-	
-	max_vel_time = (2300 - v_len) / boost_accel
-	
-	a = 0
-	b = 0
-	
-	if max_vel_time < accel_time:
-		
-		# plug time into position function
-		pos = 0.5 * boost_accel * max_vel_time * max_vel_time + v_len * max_vel_time
-		
-		# Calculate additional distance that needs to be traveled
-		extra_vel = len - pos
-		
-		# Add additional time onto velocity
-		a = max_vel_time + extra_vel / 2300
-		
-		b = 2300
-		
-	else:
-		a = accel_time
-		
-		b = 0.5 * boost_accel * a * a + v_len * a
-	
-	if not no_correction:
-		# Finally, we account for higher values being, well, higher. Not an exact science, but...
-		a = (1 + car_to_pos.z * 0.004)
-	
-	return Hit(a, b)
-	
-
 class Touch:
 	def __init__(self, time = 0, location = Vec3(), is_garunteed = False, can_save = True):
 		self.time = time
@@ -608,12 +547,12 @@ def calc_hit(car, position, minimum = False):
 	
 	# Length of the path the car must travel
 	turn = turn_radius(car_vel_len) * angle
-	len = car_path.length()
+	length = car_path.length()
 	
 	if minimum:
 		# Calculate that we don't need to turn the whole way to hit.
-		if len > 200:
-			turn2 = math.acos(140 / len)
+		if length > 200:
+			turn2 = math.acos(140 / length)
 			turn = max(0, turn - turn2)
 		else:
 			# So close that turning doesn't need to be taken into account
@@ -621,7 +560,7 @@ def calc_hit(car, position, minimum = False):
 	
 	# Calculate the time to get to the position
 	turn_time = turn / max(500, car_vel_len)
-	drive_time = Time_to_Pos(max(0.01, len - 120), car_vel_len, car.boost) if car_face.dot(car_vel) > 0.0 else Time_To_Pos_No_Boost(max(0.01, (len - 200)), car_vel_len)
+	drive_time = Time_to_Pos(max(0.01, length - 120), car_vel_len, car.boost) if car_face.dot(car_vel) > 0.0 else Time_To_Pos_No_Boost(max(0.01, (length - 200)), car_vel_len)
 	
 	drive_time.time += turn_time # + air_time
 	

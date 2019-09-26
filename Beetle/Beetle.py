@@ -1,6 +1,6 @@
 import math
 import os
-import time
+import time as _time
 import random
 from multiprocessing import Manager, Queue
 
@@ -130,7 +130,7 @@ class Beetle(BaseAgent):
 		if USE_HELPER_PROCESS:
 			# Wait for hit to be created if we haven't created a hit package yet
 			while self.hit_package is None and self.hit_prediction_queue.empty():
-				time.sleep(0.05)
+				_time.sleep(0.05)
 			
 			if not self.hit_package is None:
 				self.hit_package.recalculate_time(self.p_time, self.delta)
