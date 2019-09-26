@@ -626,7 +626,7 @@ def Dribble(self, packet, position: Vec3):
 	
 	my_car = packet.game_cars[self.index]
 	
-	car_pos = my_car.physics.location
+	car_pos = my_car.physics.location + Vec3(5).align_to(my_car.physics.rotation)
 	
 	car_direction = Vec3(1, 0, 0).align_to(my_car.physics.rotation)
 	
@@ -650,7 +650,7 @@ def Dribble(self, packet, position: Vec3):
 	if Vec3(car_pos.x - ball_pos.x, car_pos.y - ball_pos.y, 0.0).length() < 250.0 and abs(ball_vel.z) < 400.0 and ball_predict.location.z < 250.0:
 		multiplier = 1
 	
-	position = ball_pos + dir * multiplier * 25
+	position = ball_pos + dir * multiplier * 30
 	
 	position.z *= 0.2
 	
@@ -785,7 +785,7 @@ class Kickoff(Maneuver):
 			
 			ball_pos_real += offset
 			
-			ball_pos = ball_pos_real + offset - goal_dir * (100 if delta_hit < 0.6 else 200)
+			ball_pos = ball_pos_real + offset - goal_dir * (130 if delta_hit < 0.6 else 200)
 			
 			car_pos = pos(my_car)
 			
@@ -823,7 +823,7 @@ class Kickoff(Maneuver):
 						agent.controller_state.pitch = -1
 			
 			# Flips
-			if ((car_to_ball.length() - 150) < vel(my_car).length() * (0.4 if self.kickoff_type == KICKOFF.DIAGONAL else 0.22) and self.wave_dashed and delta_hit < 0.4) or self.started_flip:
+			if ((car_to_ball.length() - 150) < vel(my_car).length() * (0.25 if self.kickoff_type == KICKOFF.DIAGONAL else 0.22) and self.wave_dashed and delta_hit < 0.4) or self.started_flip:
 				self.started_flip = True
 				agent.maneuver = Kickoff_Flip(agent, packet)
 				agent.maneuver_complete = False

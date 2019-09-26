@@ -51,8 +51,10 @@ class Carry_Ball(State):
 		if cbl < 250:
 			Dribble(agent, packet, agent.field_info.opponent_goal.location)
 			
-			if agent.hit.hit_time < 0.6:
-				Enter_Flick(agent, packet, (agent.field_info.opponent_goal.location - my_car.physics.location).normal())
+			car_to_goal = (agent.field_info.opponent_goal.location - my_car.physics.location)
+			
+			if agent.hit.hit_time < 0.8 or (car_to_goal.length() < 5000 or Vec3(1, 0, 0).align_to(my_car.physics.rotation).dot(car_to_goal.flatten().normal()) > 0.9):
+				Enter_Flick(agent, packet, car_to_goal)
 				return Defend()
 			
 		else:
@@ -237,7 +239,7 @@ class Take_Shot(State):
 			
 			car_to_p1 = (drive_path.drive_path.p1 - my_car.physics.location).inflate()
 			
-			if Vec3(1, 0, 0).align_to(my_car.physics.rotation).dot(car_to_p1.normal()) > 0.95 and car_to_p1.length() < 1000:
+			if Vec3(1, 0, 0).align_to(my_car.physics.rotation).dot(car_to_p1.normal()) > 0.95 and car_to_p1.length() < my_car.physics.velocity.length():
 				agent.maneuver_complete = False
 				agent.maneuver = self.driver
 			

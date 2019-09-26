@@ -765,19 +765,20 @@ class Hit_Prediction():
 		goal_pos.z = min(goal_pos.z, max_height)
 		goal_pos.x = clamp_abs(self.hit_position.x, 700)
 		
-		# if self.hit_time > 0.25:
-		goal_vec = (goal_pos - self.hit_position)
-		shot_vec = goal_vec.normal(self.hit_velocity * 1.5)
-		# else:
+		if self.hit_car.has_dribble:
+			goal_vec = (goal_pos - self.hit_position)
+			goal_vec_2 = (goal_pos - self.hit_position + Vec3(1000, 0, 0))
+			v = self.hit_position - self.hit_car.physics.location
 			
-			# goal_vec = (goal_pos - self.hit_position)
-			# goal_vec_2 = (goal_pos - self.hit_position + Vec3(1000, 0, 0))
-			# v = self.hit_position - self.hit_car.physics.location
+			if goal_vec.angle_between(v) > goal_vec.angle_between(goal_vec_2):
+				shot_vec = goal_vec.normal(self.hit_velocity * 1.5)
+			else:
+				shot_vec = v.normal(self.hit_velocity)
 			
-			# if goal_vec.angle_between(v) > goal_vec.angle_between(goal_vec_2):
-				# shot_vec = goal_vec.normal(self.hit_velocity * 1.5)
-			# else:
-				# shot_vec = v.normal(self.hit_velocity)
+		else:
+			goal_vec = (goal_pos - self.hit_position)
+			shot_vec = goal_vec.normal(self.hit_velocity * 1.5)
+			
 			
 		
 		for i in range(self.prediction.num_slices):
@@ -1044,12 +1045,12 @@ class Dribble_Tracker:
 				self.dribble_timers.append(0)
 			
 			# Detects dribble and pushing the ball along the ground.
-			if (ball.location - car.physics.location).length() < 250:
+			if (ball.location - car.physics.location).length() < 260:
 				self.dribble_timers[i] += self.agent.delta
 			else:
 				self.dribble_timers[i] = 0
 			
-			car.has_dribble = self.dribble_timers[i] > 1
+			car.has_dribble = self.dribble_timers[i] > 0.3
 
 class Hit_Package:
 	def __init__(self, hit, ground_touch, flip_touch, air_touch):
@@ -1111,6 +1112,10 @@ def calc_path(path_vec, agent, packet):
 	drive_path = None
 	for i in range(agent.ball_prediction.num_slices):
 		s = agent.ball_prediction.slices[i]
+		
+		if s.game_seconds - current_t < agent.hit_package.flip_touch.time:
+			continue
+		
 		ball = s.physics
 		if ball.location.z < 265 and calc_hit(my_car, ball.location).time < s.game_seconds - current_t:
 			attack_vec = path_vec.get(agent, packet, ball)
