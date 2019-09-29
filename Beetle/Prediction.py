@@ -75,7 +75,7 @@ class Hit_Predictor(BotHelperProcess):
 			touch2 = hit.get_earliest_touch(self, self.packet, my_car, 265, my_goal.direction * -40)
 			touch3 = hit.get_earliest_touch(self, self.packet, my_car)
 			
-			self.hit_prediction_queue.put_nowait(Hit_Package(hit.get_simple(), touch1, touch2, Touch()).to_list())
+			self.hit_prediction_queue.put_nowait(Hit_Package(hit.get_simple(), touch1, touch2, touch3).to_list())
 		
 		self.logger.debug("Quit Beetle Prediction services")
 	

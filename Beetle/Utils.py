@@ -312,8 +312,9 @@ class Line_Arc_Line:
 		t2 = Time_to_Vel(my_car_vel, self.vel.velocity, self.car.boost)
 		if t2.time < t.time:
 			max_speed = bin_search_time(boost_acceleration, t2.time)
+			start_vel = bin_search_velocity(boost_acceleration, my_car_vel)
 			
-			len_at_max = total_length - max_speed.position
+			len_at_max = total_length - (max_speed.position - start_vel.position)
 			t.time = t2.time + len_at_max / max(0.01, t2.velocity)
 			
 			t.velocity = t2.velocity
@@ -634,13 +635,13 @@ class Hit_Prediction():
 				t = slice.game_seconds - current_time
 				if loc.z > 265:
 					air_hit = self.calc_air(packet, car, loc, t, packet.game_info.world_gravity_z)
-					if (air_hit.velocity.length() <= 1000 and t < car.boost * (1/33)):
+					if (air_hit.velocity.length() <= 1000 and t < car.boost * (1/33)) and not car.has_wheel_contact:
 						# Add a maximum velocity check
 						if project_future(packet, car.physics, t, air_hit.velocity).velocity.length() < 2300:
 							self.hit_time = slice.game_seconds - current_time
 							self.hit_game_seconds = slice.game_seconds
 							self.hit_position = loc
-							self.hit_velocity = car.physics.velocity.length() + 600
+							self.hit_velocity = car.physics.velocity.length() + slice.physics.velocity.length() * 0.6 + 2000
 							self.hit_car = car
 				else:
 					hit = calc_hit(car, loc, minimum = True)
@@ -649,7 +650,7 @@ class Hit_Prediction():
 						self.hit_time = slice.game_seconds - current_time
 						self.hit_game_seconds = slice.game_seconds
 						self.hit_position = loc
-						self.hit_velocity = min(2400, hit.velocity + (hit.velocity - slice.physics.velocity.length()) * 0.6 + 500) # Add 500 for flipping (Need to update to take into account direction of hit)
+						self.hit_velocity = min(2400, hit.velocity + slice.physics.velocity.length() * 0.6 + 1000) # Add 500 for flipping (Need to update to take into account direction of hit)
 						self.hit_car = car
 			
 			if not self.hit_time and i >= self.prediction.num_slices - 1:
@@ -674,17 +675,20 @@ class Hit_Prediction():
 	
 	# Designed for aerials. Calculates the delta v to hit a location at a time.
 	def calc_air(self, packet, car, position, time, grav_z, leniency = False):
+		
 		car_up = Vec3(0, 0, 1).align_to(car.physics.rotation)
 		
-		# More accurate simulation of the jump
-		phys = project_future(packet, 
-			Psuedo_Physics(
-				location = car.physics.location,
-				velocity = car.physics.velocity + car_up * 300,
-				rotation = car.physics.rotation,
-				angular_velocity = car.physics.angular_velocity,
-			), 0.2, car_up * 1400
-		)
+		phys = Psuedo_Physics(car.physics.location, car.physics.velocity)
+		if car.has_wheel_contact:
+			# More accurate simulation of the jump
+			phys = project_future(packet, 
+				Psuedo_Physics(
+					location = car.physics.location,
+					velocity = car.physics.velocity + car_up * 300,
+					rotation = car.physics.rotation,
+					angular_velocity = car.physics.angular_velocity,
+				), 0.2, car_up * 1400
+			)
 		
 		dv = delta_v(phys, position, max(0.0001, time), grav_z)
 		
@@ -726,16 +730,18 @@ class Hit_Prediction():
 				continue
 			loc = (slice.physics.location if slice.game_seconds < self.hit_game_seconds else self.hit_position + shot_vec * (slice.game_seconds - self.hit_game_seconds)) + offset
 			t = slice.game_seconds - current_time
-			if loc.z > 265:
-				air_hit = self.calc_air(packet, car, loc, slice.game_seconds - current_time, packet.game_info.world_gravity_z)
-				if (air_hit.velocity.length() < 700 and t < car.boost * 0.033 and loc.z < max_height) or i >= self.prediction.num_slices - 3 or abs(loc.y) > 5120:
-					return Touch(t, loc, t <= self.hit_time, abs(loc.y) < 5120)
-			else:
+			if loc.z <= 265:
 				#car_strike_loc = get_car_strike_loc(loc, packet, car)
 				#hit = self.calc_hit(car, car_strike_loc)
 				hit = calc_hit(car, loc, minimum = True)
 				if (hit.time < slice.game_seconds - current_time and loc.z < max_height) or i >= self.prediction.num_slices - 3 or abs(loc.y) > 5120:
 					return Touch(max(t, hit.time), loc, t <= self.hit_time, abs(loc.y) < 5120)
+				
+			elif slice.game_seconds - current_time > 1.2:
+				air_hit = self.calc_air(packet, car, loc, slice.game_seconds - current_time, packet.game_info.world_gravity_z, leniency = True)
+				if (air_hit.velocity.length() < 700 and t < car.boost * 0.033 and loc.z < max_height) or i >= self.prediction.num_slices - 3 or abs(loc.y) > 5120:
+					if project_future(packet, car.physics, t, air_hit.velocity).velocity.length() < 2300:
+						return Touch(t, loc, t <= self.hit_time, abs(loc.y) < 5120)
 		
 		return Touch(6, goal_pos, False, True)
 	
@@ -1026,7 +1032,7 @@ class Shot_On_Goal(Path_Vec):
 		t_v = target_vec_2.copy()
 		t_v.y *= 0.3
 		lerp_val = clamp((1000 - t_v.length()) / 1000, 0, 1)
-		attack_vec = (target_vec_2 * lerp_val + target_vec * (1 - lerp_val)).normal(-100 + ball.location.z * 4)
+		attack_vec = (target_vec_2 * lerp_val + target_vec * (1 - lerp_val)).normal(100 + ball.location.z * 6)
 		return attack_vec
 
 class Shot_In_Direction(Path_Vec):
@@ -1034,12 +1040,12 @@ class Shot_In_Direction(Path_Vec):
 		self.vec = vector * -1
 	
 	def get(self, agent, packet, ball):
-		return self.vec * (-100 + ball.location.z * 4)
+		return self.vec * (100 + ball.location.z * 6)
 
 class Shot_To_Side(Path_Vec):
 	def get(self, agent, packet, ball):
 		vec = packet.game_cars[agent.index].physics.location - ball.location
-		return Vec3(sign(vec.x), -agent.field_info.my_goal.direction.y * 0.1, 0).normal(-100 + ball.location.z * 4)
+		return Vec3(sign(vec.x), -agent.field_info.my_goal.direction.y * 0.1, 0).normal(100 + ball.location.z * 6)
 
 # Calculates the vector needed to hit a shot
 def calc_path(path_vec, agent, packet):
@@ -1058,7 +1064,7 @@ def calc_path(path_vec, agent, packet):
 		ball = s.physics
 		if ball.location.z < 265 and calc_hit(my_car, ball.location).time < s.game_seconds - current_t:
 			attack_vec = path_vec.get(agent, packet, ball)
-			dp = Line_Arc_Line(my_car, ball.location + attack_vec.normal(140), attack_vec)
+			dp = Line_Arc_Line(my_car, ball.location + ball.velocity * 0.05 + attack_vec.normal(140), attack_vec)
 			if not dp.valid or not dp.check_in_bounds():
 				continue
 			drive_path = dp
@@ -1085,8 +1091,14 @@ def calc_path(path_vec, agent, packet):
 	return Path_Hit(drive_path, target_t)
 	
 
-
-
+class Box:
+	def __init__(self, location, dimension):
+		self.location = location
+		self.dimension = dimension
+	
+	def point_in_box(self, point):
+		return abs(point.x - self.location.x) < self.dimension.x and abs(point.y - self.location.y) < self.dimension.y and abs(point.z - self.location.z) < self.dimension.z
+	
 
 
 
