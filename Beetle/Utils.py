@@ -305,22 +305,6 @@ class Line_Arc_Line:
 		agent.renderer.draw_line_3d(self.start.inflate(20).UI_Vec3(), self.p1.inflate(20).UI_Vec3(), agent.renderer.blue())
 		
 	
-	def calc_hit(self):
-		my_car_vel = self.car.physics.velocity.length()
-		total_length = (self.start - self.p1).length() + self.arc_length + self.offset.length()
-		t = Time_to_Pos(total_length, my_car_vel, self.car.boost)
-		t2 = Time_to_Vel(my_car_vel, self.vel.velocity, self.car.boost)
-		if t2.time < t.time:
-			max_speed = bin_search_time(boost_acceleration, t2.time)
-			start_vel = bin_search_velocity(boost_acceleration, my_car_vel)
-			
-			len_at_max = total_length - (max_speed.position - start_vel.position)
-			t.time = t2.time + len_at_max / max(0.01, t2.velocity)
-			
-			t.velocity = t2.velocity
-			
-		return t
-	
 	def calc_time(self):
 		return self.calc_hit().time
 	
@@ -374,6 +358,8 @@ for line in accel_f.readlines():
 		acceleration.append(a)
 		max_car_vel = max(max_car_vel, a.velocity)
 
+# print(max_car_vel)
+
 boost_acceleration = []
 for line in boost_accel_f.readlines():
 	if len(line) > 0:
@@ -425,7 +411,7 @@ def Time_To_Pos_No_Boost(length, v):
 	end = bin_search_position(acceleration, start.position + length)
 	
 	# Add on some additional time for additional length traveled at max speed.
-	extra = max(0, start.position + length - end.position) / max(0.01, end.velocity)
+	extra = (start.position + length - end.position) / max(0.01, end.velocity)
 	
 	# Wow, that was easy :P
 	return Hit(end.time - start.time + extra, end.velocity)
@@ -447,16 +433,16 @@ def Time_to_Pos(length, v, boost):
 	if end.time - start.time > t_until_no_boost:
 		# Oof, okay, let's evaluate our velocity when we run out of boost
 		no_boost = bin_search_time(boost_acceleration, start.time + t_until_no_boost)
-		if no_boost.velocity > max_car_vel:
+		if no_boost.velocity >= max_car_vel:
 			# While technically there is a slight deceleration force applied to the car, for simplicity's sake we will simply assume that the car maintains its current speed
-			extra = max(0, start.position + length - no_boost.position) / max(0.01, no_boost.velocity)
+			extra = (start.position + length - no_boost.position) / max(0.01, no_boost.velocity)
 			
 			# Easy
 			return Hit(end.time - start.time + extra, end.velocity)
 		else:
 			# Okay, so the car will now be accelerating for a bit. Fortunately, we already have a function for this, so we'll just...
 			hit = Time_To_Pos_No_Boost(start.position + length - no_boost.position, no_boost.velocity)
-			hit.time += no_boost.time - start.time
+			hit.time += t_until_no_boost
 			return hit
 		
 	else:
@@ -536,7 +522,7 @@ class Touch:
 		self.time -= dt
 
 # Determines time for car to hit a position on the ground.
-def calc_hit(car, position, minimum = False):
+def calc_hit(car, position, minimum = False, angle_correct = True):
 	car_vel = car.physics.velocity
 	car_vel_len = car_vel.length()
 	car_pos = car.physics.location
@@ -547,25 +533,42 @@ def calc_hit(car, position, minimum = False):
 	angle = car_vel.angle_between(car_path)
 	
 	# Length of the path the car must travel
-	turn = turn_radius(car_vel_len) * angle
-	length = car_path.length()
+	length = max(0, car_path.length() - (150 if minimum else 0)) # Allows us to fudge the numbers a bit
 	
-	if minimum:
+	if minimum and angle_correct:
 		# Calculate that we don't need to turn the whole way to hit.
 		if length > 200:
-			turn2 = math.acos(140 / length)
-			turn = max(0, turn - turn2)
+			turn2 = math.tan(150 / length)
+			angle = max(0, angle - turn2)
 		else:
 			# So close that turning doesn't need to be taken into account
-			turn = 0
+			angle = 0
+	
+	turn = turn_radius(car_vel_len) * angle
 	
 	# Calculate the time to get to the position
-	turn_time = turn / max(500, car_vel_len)
-	drive_time = Time_to_Pos(max(0.01, length - 120), car_vel_len, car.boost) if car_face.dot(car_vel) > 0.0 else Time_To_Pos_No_Boost(max(0.01, (length - 200)), car_vel_len)
+	turn_time = turn / max(1000, car_vel_len)
+	drive_time = Time_to_Pos(max(0.01, length), car_vel_len, car.boost) if car_face.dot(car_vel) > 0.0 else Time_To_Pos_No_Boost(max(0.01, length), car_vel_len)
 	
 	drive_time.time += turn_time # + air_time
 	
 	return drive_time
+
+def calc_path_length(car, position):
+	
+	car_pos = car.physics.location
+	car_vel = car.physics.velocity
+	car_path = (position - car_pos).flatten()
+	angle = car_vel.angle_between(car_path)
+	
+	length = max(0, car_path.length() + 50)
+	
+	turn2 = math.tan(150 / length)
+	angle = max(0, angle - turn2)
+	
+	turn = turn_radius(car_vel.length()) * angle
+	
+	return turn + length
 
 class Simple_Hit_Prediction:
 	def __init__(self, hit_prediction = None):
@@ -574,22 +577,25 @@ class Simple_Hit_Prediction:
 			self.hit_game_seconds = hit_prediction.hit_game_seconds
 			self.hit_velocity = hit_prediction.hit_velocity
 			self.hit_position = hit_prediction.hit_position
+			self.hit_index = hit_prediction.hit_index
 		else:
 			self.hit_time = 0
 			self.hit_game_seconds = 0
 			self.hit_velocity = 0
 			self.hit_position = Vec3()
+			self.hit_index = 0
 	
 	def recalculate_time(self, game_time):
 		self.hit_time = self.hit_game_seconds - game_time
 	
 	def to_numpy(self):
-		n = np.zeros(5)
+		n = np.zeros(6)
 		n[0] = self.hit_game_seconds
 		n[1] = self.hit_velocity
 		n[2] = self.hit_position.x
 		n[3] = self.hit_position.y
 		n[4] = self.hit_position.z
+		n[5] = self.hit_index
 		return n
 	
 	def from_numpy(n, game_time):
@@ -598,6 +604,7 @@ class Simple_Hit_Prediction:
 		s.hit_game_seconds = n[0]
 		s.hit_velocity = n[1]
 		s.hit_position = Vec3(n[2], n[3], n[4])
+		s.hit_index = n[5]
 		return s
 	
 	def ball_at_t(self, agent, packet, prediction, time, offset = None, max_height = 265):
@@ -606,17 +613,30 @@ class Simple_Hit_Prediction:
 		
 		slice = Get_Ball_At_T(packet, prediction, min(time, self.hit_time))
 		
+		hit_car = packet.game_cars[self.hit_index]
+		
 		goal_pos = agent.field_info.my_goal.location
-		goal_pos.z = min(goal_pos.z, max_height)
+		goal_pos.z = min(self.hit_position.z, max_height)
 		goal_pos.x = clamp_abs(self.hit_position.x, 700)
 		
-		goal_vec = (goal_pos - slice.physics.location)
-		shot_vec = goal_vec.normal(self.hit_velocity * 1.5)
+		if hit_car.has_dribble:
+			goal_vec = (goal_pos - self.hit_position)
+			goal_vec_2 = (goal_pos - self.hit_position + Vec3(1000, 0, 0))
+			v = self.hit_position - hit_car.physics.location
+			
+			if goal_vec.angle_between(v) > goal_vec.angle_between(goal_vec_2):
+				shot_vec = goal_vec.normal(self.hit_velocity * 1.5)
+			else:
+				shot_vec = v.normal(self.hit_velocity)
+			
+		else:
+			goal_vec = (goal_pos - self.hit_position)
+			shot_vec = goal_vec.normal(self.hit_velocity * 1.5)
 		
 		return (slice.physics.location if time < self.hit_time else slice.physics.location + shot_vec * (time - self.hit_time)) + offset
 
 # Predictions from this will be a little off. Need to make it take into account the change of position in the turn
-class Hit_Prediction():
+class Hit_Prediction(Simple_Hit_Prediction):
 	def __init__(self, agent, packet):
 		self.prediction = agent.ball_prediction
 		team = agent.team
@@ -627,7 +647,7 @@ class Hit_Prediction():
 			if slice.game_seconds < current_time:
 				continue
 			
-			for car in packet.game_cars:
+			for index, car in enumerate(packet.game_cars):
 				if car.team == team or car.is_demolished:
 					continue
 				
@@ -643,6 +663,7 @@ class Hit_Prediction():
 							self.hit_position = loc
 							self.hit_velocity = car.physics.velocity.length() + slice.physics.velocity.length() * 0.6 + 2000
 							self.hit_car = car
+							self.hit_index = index
 				else:
 					hit = calc_hit(car, loc, minimum = True)
 					if hit.time < slice.game_seconds - current_time:
@@ -652,6 +673,7 @@ class Hit_Prediction():
 						self.hit_position = loc
 						self.hit_velocity = min(2400, hit.velocity + slice.physics.velocity.length() * 0.6 + 1000) # Add 500 for flipping (Need to update to take into account direction of hit)
 						self.hit_car = car
+						self.hit_index = index
 			
 			if not self.hit_time and i >= self.prediction.num_slices - 1:
 				self.hit_time = 6
@@ -659,6 +681,7 @@ class Hit_Prediction():
 				self.hit_game_seconds = current_time + 6
 				self.hit_velocity = 0
 				self.hit_car = packet.game_cars[0]
+				self.hit_index = 0
 			
 			if self.hit_time:
 				break
@@ -678,21 +701,21 @@ class Hit_Prediction():
 		
 		car_up = Vec3(0, 0, 1).align_to(car.physics.rotation)
 		
-		phys = Psuedo_Physics(car.physics.location, car.physics.velocity)
+		phys = Psuedo_Physics(
+			location = car.physics.location,
+			velocity = car.physics.velocity,
+			rotation = car.physics.rotation,
+			angular_velocity = car.physics.angular_velocity,
+		)
 		if car.has_wheel_contact:
 			# More accurate simulation of the jump
-			phys = project_future(packet, 
-				Psuedo_Physics(
-					location = car.physics.location,
-					velocity = car.physics.velocity + car_up * 300,
-					rotation = car.physics.rotation,
-					angular_velocity = car.physics.angular_velocity,
-				), 0.2, car_up * 1400
-			)
+			phys.velocity += car_up * 300
+			phys = project_future(packet, phys, 0.2, car_up * 1400)
+			time -= 0.2
 		
 		dv = delta_v(phys, position, max(0.0001, time), grav_z)
 		
-		if dv.length() > 1000 or (leniency and dv.length() >= 700):
+		if dv.length() > 1000 or (leniency and dv.length() >= 800):
 			phys.velocity += car_up * 300
 			dv = delta_v(phys, position, max(0.0001, time), grav_z)
 		
@@ -705,7 +728,7 @@ class Hit_Prediction():
 		current_time = packet.game_info.seconds_elapsed
 		
 		goal_pos = agent.field_info.my_goal.location
-		goal_pos.z = min(goal_pos.z, max_height)
+		goal_pos.z = min(self.hit_position.z, max_height)
 		goal_pos.x = clamp_abs(self.hit_position.x, 700)
 		
 		if self.hit_car.has_dribble:
@@ -737,9 +760,9 @@ class Hit_Prediction():
 				if (hit.time < slice.game_seconds - current_time and loc.z < max_height) or i >= self.prediction.num_slices - 3 or abs(loc.y) > 5120:
 					return Touch(max(t, hit.time), loc, t <= self.hit_time, abs(loc.y) < 5120)
 				
-			elif slice.game_seconds - current_time > 1.2:
+			elif slice.game_seconds - current_time > 1:
 				air_hit = self.calc_air(packet, car, loc, slice.game_seconds - current_time, packet.game_info.world_gravity_z, leniency = True)
-				if (air_hit.velocity.length() < 700 and t < car.boost * 0.033 and loc.z < max_height) or i >= self.prediction.num_slices - 3 or abs(loc.y) > 5120:
+				if (air_hit.velocity.length() < 800 and t < car.boost * 0.033 and loc.z < max_height) or i >= self.prediction.num_slices - 3 or abs(loc.y) > 5120:
 					if project_future(packet, car.physics, t, air_hit.velocity).velocity.length() < 2300:
 						return Touch(t, loc, t <= self.hit_time, abs(loc.y) < 5120)
 		
@@ -1055,7 +1078,8 @@ def calc_path(path_vec, agent, packet):
 	
 	target_t = -1
 	drive_path = None
-	for i in range(agent.ball_prediction.num_slices):
+	
+	for i in range(agent.ball_prediction.num_slices, 5):
 		s = agent.ball_prediction.slices[i]
 		
 		if s.game_seconds - current_t < agent.hit_package.flip_touch.time:
@@ -1074,7 +1098,7 @@ def calc_path(path_vec, agent, packet):
 	
 	# Extra refining
 	if not drive_path is None:
-		i = target_t - 0.05
+		i = target_t - 0.1
 		while i < target_t:
 			ball = Get_Ball_At_T(packet, agent.ball_prediction, i).physics
 			if ball.location.z < 265 and calc_hit(my_car, ball.location).time < i - current_t:
@@ -1086,7 +1110,7 @@ def calc_path(path_vec, agent, packet):
 				target_t = i - current_t
 				if drive_path.calc_time() < target_t:
 					break
-			i += 0.01
+			i += 0.015
 	
 	return Path_Hit(drive_path, target_t)
 	
