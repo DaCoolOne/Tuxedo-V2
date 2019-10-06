@@ -747,13 +747,13 @@ class Hit_Prediction(Simple_Hit_Prediction):
 		
 		if self.hit_car.has_dribble:
 			goal_vec = (goal_pos - self.hit_position)
-			goal_vec_2 = (goal_pos - self.hit_position + Vec3(1000, 0, 0))
-			v = self.hit_position - self.hit_car.physics.location
+			# goal_vec_2 = (goal_pos - self.hit_position + Vec3(1000, 0, 0))
+			# v = self.hit_position - self.hit_car.physics.location
 			
-			if goal_vec.angle_between(v) > goal_vec.angle_between(goal_vec_2):
-				shot_vec = goal_vec.normal(self.hit_velocity * 1.5)
-			else:
-				shot_vec = v.normal(self.hit_velocity)
+			# if goal_vec.angle_between(v) > goal_vec.angle_between(goal_vec_2):
+			shot_vec = goal_vec.normal(self.hit_car.physics.velocity.length())
+			# else:
+				# shot_vec = v.normal(self.hit_velocity)
 			
 		else:
 			goal_vec = (goal_pos - self.hit_position)

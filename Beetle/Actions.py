@@ -860,8 +860,7 @@ class Kickoff(Maneuver):
 			local_car_to_ball = car_to_ball.align_from(my_car.physics.rotation)
 			
 			if self.kickoff_type == KICKOFF.OFF_CENTER and not self.wave_dashed:
-				off_center_pos = Vec3(sign(car_pos.x) * 50, 2900 * sign(car_pos.y), 0)
-				print(1)
+				off_center_pos = Vec3(sign(car_pos.x) * 60, 2900 * sign(car_pos.y), 0)
 				
 				# Stall flip
 				if not self.jumped:
@@ -877,7 +876,6 @@ class Kickoff(Maneuver):
 				agent.controller_state.boost = True
 			else:
 				# Wave dash
-				print(2)
 				self.jumped = self.jumped or vel(my_car).z > 10
 				
 				if car_to_ball.length() < vel(my_car).length() * 0.5:
@@ -952,7 +950,7 @@ def JumpShot_Handler(agent,packet,ideal_time = 0, perfect_world = False, cautiou
 	shot_limit = 0.9
 	
 	ball_offset = 93
-	offset_mul = 1 if perfect_world else 0.75
+	offset_mul = 1 if perfect_world else 1
 	
 	if (touch.location- myGoal).length() < 2500:
 		direction = (touch.location - myGoal).flatten().normal()
