@@ -182,7 +182,7 @@ class Maneuver_Jump_Shot(Maneuver):
 				if age >= self.delay - 0.2 and age < self.delay - 0.15:
 					controller_state.jump = False
 				elif age >= self.delay - 0.05 and age < self.delay + 0.05:
-					vec = packet.game_ball.physics.location + packet.game_ball.physics.velocity * 0.1 - car.physics.location
+					vec = packet.game_ball.physics.location - car.physics.location + Vec3(17).align_to(car.physics.rotation)
 					direction = vec.flatten().normal().align_from(car.physics.rotation)
 					controller_state.jump = True
 					controller_state.pitch = -direction.x
@@ -407,10 +407,10 @@ def drive(agent, packet, target_loc, time_allotted, target_v=-1, min_straight_sp
 	if abs(speed_err + 10) < 10:
 		cs.throttle = 0.1
 	else:
-		cs.throttle = -speed_err * 0.01 + 0.05
+		cs.throttle = -speed_err * 0.01 + 0.03
 		# cs.throttle = 1
 	
-	should_boost = current_speed < 2275 and (always_boost or speed_err < -100 or (sensitive_boost and speed_err < -100))
+	should_boost = current_speed < 2275 and (always_boost or speed_err < -200 or (sensitive_boost and speed_err < -100))
 	cs.boost = should_boost and not cs.handbrake
 	
 	dist_until_brake = car_to_loc.length() - brake_dist(car_v.length(), target_v) - (2.0 * car_v.length() * (1.0 / 60.0))
@@ -492,7 +492,7 @@ class Line_Arc_Line_Driver(Maneuver):
 		self.suspend_hit_prediction = False
 		self.line_arc_line = line_arc_line
 		if execute_time < 0:
-			self.execute_time = line_arc_line.calc_time()
+			self.execute_time = line_arc_line.calc_time(packet.game_cars[agent.index])
 		else:
 			self.execute_time = execute_time
 		self.stage = 0
@@ -745,6 +745,43 @@ class Kickoff_Flip(Maneuver):
 			
 			return delta > 0.7
 
+class Stall_Flip(Maneuver):
+	def __init__(self, agent, packet):
+		self.start = packet.game_info.seconds_elapsed
+		self.flipped = False
+	
+	def update(self, agent, packet):
+		delta = packet.game_info.seconds_elapsed - self.start
+		if delta < 0.1:
+			agent.controller_state.jump = True
+		elif delta > 0.15 and not self.flipped:
+			my_car = packet.game_cars[agent.index]
+			vec = packet.game_ball.physics.location - my_car.physics.location
+			vec = vec + packet.game_ball.physics.velocity.normal(vec.length() * 0.5)
+			direction = vec.align_from(my_car.physics.rotation).flatten()
+			agent.controller_state.jump = True
+			agent.controller_state.roll = sign(direction.y) * 0.6
+			agent.controller_state.pitch = -1
+			self.flipped = True
+		else:
+			my_car = packet.game_cars[agent.index]
+			agent.controller_state.jump = False
+			# agent.controller_state.pitch = 1
+			# agent.controller_state.roll = 0
+			
+			# if delta > 0.7:
+				# my_car = packet.game_cars[agent.index]
+				# Align_Car_To(agent, packet, my_car.physics.velocity.flatten(), Vec3(0, 0, 1))
+			
+			if delta > 0.7:
+				Align_Car_To(agent, packet, my_car.physics.velocity.flatten(), Vec3(0, 0, 1))
+			else:
+				Align_Car_To(agent, packet, my_car.physics.velocity.flatten())
+				agent.controller_state.pitch = 1
+			
+			return delta > 1
+		return False
+
 class Kickoff(Maneuver):
 	
 	def __init__(self, agent, packet):
@@ -772,6 +809,8 @@ class Kickoff(Maneuver):
 		
 		self.kickoff_dir = sign(car_x)
 		
+		self.kickoff_move = None
+		
 	
 	def update(self, agent, packet):
 		
@@ -788,8 +827,6 @@ class Kickoff(Maneuver):
 			self.handbrake_timer += agent.delta
 			
 			my_car = packet.game_cars[agent.index]
-			
-			self.jumped = self.jumped or vel(my_car).z > 10
 			
 			my_goal = agent.field_info.my_goal
 			goal_dir = my_goal.direction
@@ -822,35 +859,54 @@ class Kickoff(Maneuver):
 			car_to_ball_real = ball_pos_real - car_pos
 			local_car_to_ball = car_to_ball.align_from(my_car.physics.rotation)
 			
-			if car_to_ball.length() < vel(my_car).length() * 0.5:
-				agent.controller_state = drive(agent, packet, ball_pos, 0.05, allow_flips = False)
-			else:
-				agent.controller_state = drive(agent, packet, ball_pos, 0.05, allow_flips = False)
-			
-			agent.controller_state.throttle = 1.0
-			agent.controller_state.boost = (not self.jumped or vel(my_car).z > 10) and not self.wave_dashed
-			
-			agent.controller_state.jump = not self.jumped and vel(my_car).length() > 900
-			
-			agent.controller_state.handbrake = self.handbrake_timer < 0.15
-			if agent.controller_state.handbrake:
-				agent.controller_state.steer = 0
-			
-			agent.controller_state.boost = True
-			
-			if not self.wave_dashed and self.jumped:
-				self.handbrake_timer = 0.0
-				if vel(my_car).z > 90:
-					Align_Car_To(agent, packet, car_to_ball.normal() - Vec3(0, 0, 0.5), Vec3(0, 0, 1))
-					# agent.controller_state.boost = True
+			if self.kickoff_type == KICKOFF.OFF_CENTER and not self.wave_dashed:
+				off_center_pos = Vec3(sign(car_pos.x) * 50, 2900 * sign(car_pos.y), 0)
+				print(1)
+				
+				# Stall flip
+				if not self.jumped:
+					if (car_pos - off_center_pos).length() < 600:
+						self.kickoff_move = Stall_Flip(agent, packet)
+						self.jumped = True
+					
+					agent.controller_state = drive(agent, packet, off_center_pos, 0.01, allow_flips = False)
 				else:
-					Align_Car_To(agent, packet, car_to_ball.normal() + Vec3(0, 0, 0.7), Vec3(0, 0, 1))
-					if pos(my_car).z < 45:
-						self.wave_dashed = True
-						agent.controller_state.jump = True
-						agent.controller_state.yaw = 0.0
-						agent.controller_state.roll = 0.0
-						agent.controller_state.pitch = -1
+					self.wave_dashed = self.kickoff_move.update(agent, packet)
+				
+				agent.controller_state.throttle = 1
+				agent.controller_state.boost = True
+			else:
+				# Wave dash
+				print(2)
+				self.jumped = self.jumped or vel(my_car).z > 10
+				
+				if car_to_ball.length() < vel(my_car).length() * 0.5:
+					agent.controller_state = drive(agent, packet, ball_pos, 0.01, allow_flips = False)
+				else:
+					agent.controller_state = drive(agent, packet, ball_pos, 0.01, allow_flips = False)
+				
+				agent.controller_state.jump = not self.jumped and vel(my_car).length() > 900
+				
+				agent.controller_state.handbrake = self.handbrake_timer < 0.15
+				if agent.controller_state.handbrake:
+					agent.controller_state.steer = 0
+				
+				agent.controller_state.boost = True
+				agent.controller_state.throttle = 1.0
+				
+				if not self.wave_dashed and self.jumped:
+					self.handbrake_timer = 0.0
+					if vel(my_car).z > 90:
+						Align_Car_To(agent, packet, car_to_ball.normal() - Vec3(0, 0, 0.5), Vec3(0, 0, 1))
+						# agent.controller_state.boost = True
+					else:
+						Align_Car_To(agent, packet, car_to_ball.normal() + Vec3(0, 0, 0.7), Vec3(0, 0, 1))
+						if pos(my_car).z < 45:
+							self.wave_dashed = True
+							agent.controller_state.jump = True
+							agent.controller_state.yaw = 0.0
+							agent.controller_state.roll = 0.0
+							agent.controller_state.pitch = -1
 			
 			# Flips
 			if ((car_to_ball.length() - 150) < vel(my_car).length() * (0.25 if self.kickoff_type == KICKOFF.DIAGONAL else 0.22) and self.wave_dashed and delta_hit < 0.15) or self.started_flip:
@@ -861,21 +917,21 @@ class Kickoff(Maneuver):
 				self.timer = 0.0
 			
 			# This is how we exit the maneuver
-			return packet.game_ball.physics.location.y != 0
+			return not packet.game_info.is_kickoff_pause
 		
 		else:
 			
 			agent.controller_state.throttle = 1.0
 			agent.controller_state.boost = True
 			
-			self.has_started = (pos(packet.game_cars[agent.index]) - self.start_pos).length() > 30
+			self.has_started = (pos(packet.game_cars[agent.index]) - self.start_pos).length() > 10
 			
 			return False
 		
 	
 
 # Todo: Re-vamp this
-def JumpShot_Handler(agent,packet,ideal_time = 0, perfect_world = False):
+def JumpShot_Handler(agent,packet,ideal_time = 0, perfect_world = False, cautious = True):
 	
 	hit = agent.hit
 	
@@ -896,14 +952,14 @@ def JumpShot_Handler(agent,packet,ideal_time = 0, perfect_world = False):
 	shot_limit = 0.9
 	
 	ball_offset = 93
-	offset_mul = 1 if perfect_world else 0.8
+	offset_mul = 1 if perfect_world else 0.75
 	
 	if (touch.location- myGoal).length() < 2500:
 		direction = (touch.location - myGoal).flatten().normal()
 	else:
 		direction = (enemyGoal - touch.location).flatten().normal()
 	
-	if rolling and (touch.location - my_car.physics.location).normal().dot(direction) < 0:
+	if rolling and (touch.location - my_car.physics.location).normal().dot(direction) < 0 and cautious:
 		direction = Vec3(sign(touch.location.x), agent.field_info.my_goal.direction.y).normal()
 		
 	
@@ -950,7 +1006,7 @@ def JumpShot_Handler(agent,packet,ideal_time = 0, perfect_world = False):
 		future_car = project_future(packet, sub_step, max(0, touch.time - 0.2))
 		futurePos = future_car.location
 		if touch.time < shot_limit:
-			if agent.hit.hit_time - touch.time > -0.15 and (futurePos.z < touch.location.z or touch.time < 0.2) and (futurePos-ideal_position).flatten().length() < (futurePos-bad_position).flatten().length() and (futurePos - ideal_position).flatten().length() < 100:
+			if agent.hit.hit_time - touch.time > -0.15 and (futurePos.z < touch.location.z or touch.time < 0.3) and (futurePos-ideal_position).flatten().length() < (futurePos-bad_position).flatten().length() and (futurePos - ideal_position).flatten().length() < 100:
 				agent.maneuver = Maneuver_Jump_Shot(agent, packet, touch.time, touch.location)
 				agent.maneuver_complete = False
 	

@@ -225,7 +225,8 @@ class Line_Arc_Line:
 		self.offset = Vec2.cast(offset)
 		self.p2 = self.target + self.offset
 		start_to_p2 = self.p2 - self.start
-		self.vel = Time_to_Pos(start_to_p2.length(), car.physics.velocity.flatten().length(), car.boost)
+		start_v = car.physics.velocity.flatten().length()
+		self.vel = Time_to_Pos(start_to_p2.length(), start_v, car.boost)
 		
 		v_upper = self.vel.velocity
 		
@@ -305,8 +306,20 @@ class Line_Arc_Line:
 		agent.renderer.draw_line_3d(self.start.inflate(20).UI_Vec3(), self.p1.inflate(20).UI_Vec3(), agent.renderer.blue())
 		
 	
-	def calc_time(self):
-		return self.calc_hit().time
+	def calc_time(self, car):
+		total_length = self.arc_length + (self.start + self.p1).length() # + self.offset.length()
+		max_v = self.vel.velocity
+		t1 = Time_to_Vel(max_v, car.physics.velocity.flatten().length(), car.boost)
+		t2 = Time_to_Pos(total_length, car.physics.velocity.flatten().length(), car.boost)
+		
+		if t2.time < t1.time:
+			return t2.time + (self.offset.length() / t2.velocity)
+		
+		length_to_max_speed = t1.location
+		length_at_max_speed = total_length - length_to_max_speed
+		
+		return t1.time + (self.offset.length() + length_at_max_speed) / max_v
+		
 	
 	def check_in_bounds(self):
 		return point_in_bounds(
@@ -462,7 +475,7 @@ def Time_To_Vel_No_Boost(vel, v):
 	end = bin_search_velocity(acceleration, vel)
 	
 	# Wow, that was easy :P
-	return Hit(end.time - start.time, end.velocity)
+	return Hit(end.time - start.time, location = end.position - start.position)
 
 boost_consumption = 1/33
 # Returns the ammount of time needed for a car to travel a length given a boost ammount and an initial velocity
@@ -483,16 +496,17 @@ def Time_to_Vel(vel, v, boost):
 		no_boost = bin_search_time(boost_acceleration, start.time + t_until_no_boost)
 		if no_boost.velocity > max_car_vel:
 			# Easy
-			return Hit(end.time - start.time, end.velocity)
+			return Hit(end.time - start.time, location = end.position - start.position)
 		else:
 			# Okay, so the car will now be accelerating for a bit. Fortunately, we already have a function for this, so we'll just...
 			hit = Time_To_Vel_No_Boost(start.velocity + vel - no_boost.velocity, no_boost.velocity)
 			hit.time += no_boost.time - start.time
+			hit.location += no_boost.position - start.position
 			return hit
 		
 	else:
 		# Easy
-		return Hit(end.time - start.time, end.velocity)
+		return Hit(end.time - start.time, location = end.position - start.position)
 	
 
 class Touch:
@@ -1079,7 +1093,7 @@ def calc_path(path_vec, agent, packet):
 	target_t = -1
 	drive_path = None
 	
-	for i in range(agent.ball_prediction.num_slices, 5):
+	for i in range(agent.ball_prediction.num_slices):
 		s = agent.ball_prediction.slices[i]
 		
 		if s.game_seconds - current_t < agent.hit_package.flip_touch.time:
@@ -1091,26 +1105,27 @@ def calc_path(path_vec, agent, packet):
 			dp = Line_Arc_Line(my_car, ball.location + ball.velocity * 0.05 + attack_vec.normal(140), attack_vec)
 			if not dp.valid or not dp.check_in_bounds():
 				continue
-			drive_path = dp
-			target_t = s.game_seconds - current_t
-			if drive_path.calc_time() < target_t:
+			if dp.calc_time(my_car) < i:
+				drive_path = dp
+				target_t = i
 				break
 	
 	# Extra refining
 	if not drive_path is None:
-		i = target_t - 0.1
+		i = max(0, target_t - 0.1)
 		while i < target_t:
 			ball = Get_Ball_At_T(packet, agent.ball_prediction, i).physics
-			if ball.location.z < 265 and calc_hit(my_car, ball.location).time < i - current_t:
+			if ball.location.z < 265 and calc_hit(my_car, ball.location).time < i:
 				attack_vec = path_vec.get(agent, packet, ball)
 				dp = Line_Arc_Line(my_car, ball.location + attack_vec.normal(140), attack_vec)
 				if not dp.valid or not dp.check_in_bounds():
+					i += 0.02
 					continue
-				drive_path = dp
-				target_t = i - current_t
-				if drive_path.calc_time() < target_t:
+				if dp.calc_time(my_car) < i:
+					drive_path = dp
+					target_t = i
 					break
-			i += 0.015
+			i += 0.02
 	
 	return Path_Hit(drive_path, target_t)
 	

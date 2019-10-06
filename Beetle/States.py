@@ -4,6 +4,8 @@ from Utils import *
 from Actions import *
 from math import degrees
 
+from rlbot.utils.game_state_util import GameState, BallState, CarState, Physics, Vector3, Rotator, GameInfoState
+
 # A state either returns None (for allowing the program to select state) or a state which will be run on the next get_output
 # Can also return itself to lock its own state
 
@@ -112,12 +114,12 @@ class Defend(State):
 			# JumpShot_Handler(agent, packet)
 		# else:
 		
-		drive_path = calc_path(Shot_On_Goal(), agent, packet)
+		drive_path = calc_path(Shot_To_Side(), agent, packet)
 		
-		if drive_path.drive_path is None or drive_path.time > agent.hit.hit_time - 0.75:
-			drive_path = calc_path(Shot_To_Side(), agent, packet)
+		# if drive_path.drive_path is None or drive_path.time > agent.hit.hit_time - 0.75:
+			# drive_path = calc_path(Shot_To_Side(), agent, packet)
 		
-		if drive_path.drive_path is None or drive_path.time > agent.hit.hit_time - 0.75:
+		if drive_path.drive_path is None or drive_path.time > agent.hit.hit_time + 0.05:
 			JumpShot_Handler(agent, packet)
 		else:
 			self.driver = Line_Arc_Line_Driver(agent, packet, drive_path.drive_path, execute_time = drive_path.time)
@@ -150,9 +152,9 @@ class Defend(State):
 		
 		pad_grab_time_2 = calc_hit(my_car, agent.field_info.full_boosts[c_boost].location).time + Time_to_Pos((agent.field_info.full_boosts[c_boost].location - touch.location).length(), 0, 100).time if c_boost >= 0 else 10000
 		
-		if agent.hit_package.ground_touch.time < hit.hit_time - 2 and agent.hit_package.ground_touch.time < 1.2 and ball.location.z > 120 and bTOGT == -1 and (ball.location - agent.field_info.my_goal.location).length() > 2000:
-			return Carry_Ball()
-		elif (touch.time < hit.hit_time - 0.5 and b_g_o_len < 4000):
+		# if agent.hit_package.ground_touch.time < hit.hit_time - 2 and agent.hit_package.ground_touch.time < 1.2 and ball.location.z > 120 and bTOGT == -1 and (ball.location - agent.field_info.my_goal.location).length() > 2000:
+			# return Carry_Ball()
+		if (touch.time < hit.hit_time - 0.5 and b_g_o_len < 4000):
 			return Take_Shot(agent)
 		elif agent.touch_type == TouchType.aerial and touch.is_garunteed and touch.time > 1 and touch.location.z > 300:
 			if my_goal.direction.dot(my_car.physics.location - touch.location) > 0.0:
@@ -261,7 +263,7 @@ class Take_Shot(State):
 		
 		if drive_path.drive_path is None or drive_path.time > agent.hit.hit_time - 0.75 or (my_car.physics.location - touch.location).normal().dot(my_car.physics.velocity.normal()) > 0.3:
 			
-			JumpShot_Handler(agent, packet)
+			JumpShot_Handler(agent, packet, cautious = False)
 			
 		else:
 			self.driver = Line_Arc_Line_Driver(agent, packet, drive_path.drive_path, execute_time = drive_path.time)
@@ -372,4 +374,39 @@ class Test_Drive_Goal(State):
 		agent.controller_state = drive(agent, packet, agent.field_info.my_goal.location, 2)
 		if (my_car.physics.location - agent.field_info.my_goal.location).length() < 1000 or (my_car.physics.location - packet.game_ball.physics.location).length() > 3000:
 			return Test_Line_Arc_Line_Init()
+
+class Kickoff_Tester(State):
+	def __init__(self):
+		self.timer = 0
+	
+	def output(self, agent, packet):
+		self.timer += agent.delta
+		
+		# Reset kickoff stuff
+		if self.timer > 5:
+			
+			# Setup the off center kickoff
+			
+			car_state = CarState(boost_amount=33, 
+					physics=Physics(location = Vector3(-256.0, 3840, (17.1 if self.timer > 5.05 else 10000)), velocity=Vector3(0,0,0), rotation=Rotator(0, math.pi / 2 * 3, 0),
+					angular_velocity=Vector3(0, 0, 0)))
+			
+			ball_state = BallState(Physics(location=Vector3(0, 0, 93), angular_velocity=Vector3(0, 0, 0), velocity=Vector3(0,0,0)))
+			
+			# game_info_state = GameInfoState(world_gravity_z=-650, game_speed=0.8)
+			game_info_state = GameInfoState(world_gravity_z=-650, game_speed=1)
+			
+			game_state = GameState(ball=ball_state, cars={agent.index: car_state}, game_info=game_info_state)
+			
+			agent.set_game_state(game_state)
+			
+			if self.timer > 5.1:
+				self.timer = 0
+				agent.maneuver = Kickoff(agent, packet)
+				agent.maneuver_complete = False
+		
+		return self
+		
+		
+	
 
