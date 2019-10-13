@@ -509,6 +509,30 @@ def Time_to_Vel(vel, v, boost):
 		return Hit(end.time - start.time, location = end.position - start.position)
 	
 
+def Vel_at_Time_No_Boost(vel, t):
+	current_t = bin_search_velocity(acceleration, vel)
+	end_t = bin_search_time(acceleration, current_t.time + t)
+	return end_t.velocity
+
+def Vel_at_Time(vel, t, boost):
+	t_until_no_boost = boost * boost_consumption
+	
+	current_t = bin_search_velocity(boost_acceleration, vel)
+	
+	if t > t_until_no_boost:
+		no_boost = bin_search_time(boost_acceleration, current_t.time + t_until_no_boost)
+		if no_boost.velocity > max_car_vel:
+			return no_boost.velocity
+		else:
+			# return Vel_at_Time_No_Boost(no_boost.velocity, t - t_until_no_boost)
+			end_t = bin_search_time(acceleration, no_boost.time + t - t_until_no_boost)
+			return end_t.velocity
+	else:
+		end_t = bin_search_time(boost_acceleration, current_t.time + t)
+		return end_t.velocity
+	
+	
+
 class Touch:
 	def __init__(self, time = 0, location = Vec3(), is_garunteed = False, can_save = True):
 		self.time = time
@@ -534,6 +558,13 @@ class Touch:
 	
 	def recalculate_time(self, dt):
 		self.time -= dt
+
+def calc_turn(car, position):
+	car_vel = car.physics.velocity
+	car_pos = car.physics.location
+	car_path = (position - car_pos).flatten()
+	angle = car_vel.angle_between(car_path)
+	return turn_radius(car_vel.length()) * angle
 
 # Determines time for car to hit a position on the ground.
 def calc_hit(car, position, minimum = False, angle_correct = True):
