@@ -1071,7 +1071,7 @@ def JumpShot_Handler(agent,packet,ideal_time = 0, perfect_world = False, cautiou
 	# Refine the touch
 	car_vel_len = my_car.physics.velocity.length()
 	found_touch = False
-	i = max(0, touch.time - 0.1)
+	i = max(0, touch.time - 0.2)
 	jump_time = None
 	step = (1/60)
 	while i < touch.time + 0.3:
@@ -1128,9 +1128,9 @@ def JumpShot_Handler(agent,packet,ideal_time = 0, perfect_world = False, cautiou
 			# agent.maneuver_complete = False
 	
 	# elif grounded and not on_wall:
-	if grounded: # and not on_wall:
+	if grounded and not on_wall:
 		j_t = max(0.15, jump_time)
-		if agent.hit.hit_time - touch.time > -0.15 and touch.time - j_t < 0.05 and (my_car.physics.location + my_car.physics.velocity * j_t - touch.location).flatten().length() < 220:
+		if (agent.hit.hit_time - touch.time > -0.15 or (packet.game_cars[agent.hit.hit_index].has_dribble and agent.hit.hit_time - touch.time > -0.3)) and touch.time - j_t < 0.05 and (my_car.physics.location + my_car.physics.velocity * j_t - touch.location).flatten().length() < 250:
 			agent.maneuver = Maneuver_Jump_Shot(agent, packet, touch.time, touch.location)
 			agent.maneuver_complete = False
 	

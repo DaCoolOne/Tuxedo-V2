@@ -164,7 +164,7 @@ class Defend(State):
 				return Align_For_Aerial(agent, packet, my_goal.direction * -90 + Vec3(sign(touch.location.x) * 40, 0, -80))
 			else:
 				return Align_For_Aerial(agent, packet, my_goal.direction * -100 + Vec3(0, 0, -80))
-		elif my_car.boost < 70 and touch.time > 1 and ((pad_grab_time < (hit.hit_time + (hit.hit_position - my_goal.location).length() / max(1, hit.hit_velocity * 1.75)) - 0.5 and touch.time > hit.hit_time) or pad_grab_time_2 < touch.time) and (pad_grab_time < (bTOGT - packet.game_info.seconds_elapsed) or bTOGT == -1) and touch.time < hit.hit_time + 1:
+		elif my_car.boost < 70 and touch.time > 1 and ((pad_grab_time < (hit.hit_time + (hit.hit_position - my_goal.location).length() / max(1, hit.hit_velocity * 1.5)) and touch.time > hit.hit_time) or pad_grab_time_2 < touch.time) and (pad_grab_time < (bTOGT - packet.game_info.seconds_elapsed) or bTOGT == -1) and touch.time < hit.hit_time + 0.5:
 			return Grab_Boost(agent)
 		
 
@@ -293,13 +293,16 @@ class Grab_Boost(State):
 		
 		c_boost = get_corner_boost_index(agent)
 		
-		if c_boost < 0 or self.boost_index != c_boost:
-			return Defend()
+		boost = agent.field_info.full_boosts[self.boost_index]
+		c_to_b = (boost.location - my_car.physics.location)
 		
 		# Collect a boost pad
-		agent.controller_state = drive(agent, packet, agent.field_info.full_boosts[c_boost].location, 0, 0, allow_flips = True)
+		agent.controller_state = drive(agent, packet, boost.location, 0, 0, allow_flips = True)
 		
-		render_star(agent, agent.field_info.full_boosts[c_boost].location, agent.renderer.yellow())
+		if c_boost < 0 or self.boost_index != c_boost or (c_to_b.length() < 500 and my_car.physics.velocity.dot(c_to_b) < 0.0):
+			return Defend()
+		
+		render_star(agent, boost.location, agent.renderer.yellow())
 		
 		if my_car.boost > 90:
 			return Defend()

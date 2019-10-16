@@ -1018,7 +1018,7 @@ def get_corner_boost_index(agent):
 	car_vel = my_car.physics.velocity
 	
 	s = sign(clamp_abs(car_pos.y, 5000) - agent.field_info.my_goal.location.y)
-	s2 = sign(car_pos.x + car_vel.x * 0.5)
+	s2 = sign(car_pos.x + car_vel.x)
 	
 	max_l = 0
 	max_i = -1
@@ -1026,7 +1026,7 @@ def get_corner_boost_index(agent):
 	car_face = Vec3(1, 0, 0).align_to(my_car.physics.rotation)
 	
 	for i, boost in enumerate(agent.field_info.full_boosts):
-		if sign(clamp_abs(my_car.physics.location.y + max(0, car_vel.y * s) * s, 5000) - boost.location.y + s * (100 - my_car.boost) * 10) == s and sign(boost.location.x) == s2 and agent.packet.game_boosts[boost.index].is_active and car_face.dot(boost.location - car_pos) > 0:
+		if sign(clamp_abs(car_pos.y + car_vel.y, 5000) * s - boost.location.y + s * (100 - my_car.boost) * 10) == s and sign(boost.location.x) == s2 and agent.packet.game_boosts[boost.index].is_active:
 			if (boost.location.y - agent.field_info.my_goal.location.y) * s > max_l:
 				max_i = i
 				max_l = (boost.location.y - agent.field_info.my_goal.location.y) * s
