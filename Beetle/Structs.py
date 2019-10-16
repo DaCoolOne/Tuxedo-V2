@@ -54,8 +54,8 @@ class Vec3:
 	def copy(self):
 		return Vec3(self.x, self.y, self.z)
 	
-	def flatten(self):
-		return Vec3(self.x, self.y, 0.0)
+	def flatten(self, n=0):
+		return Vec3(self.x, self.y, 0)
 	
 	def normal(self, n = 1):
 		l = max(self.length(), 0.0001)

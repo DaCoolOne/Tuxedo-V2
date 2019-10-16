@@ -331,11 +331,11 @@ class Line_Arc_Line:
 		) and point_in_bounds(
 			self.arc_center + Vec2( 1, 0) * self.arc_radius
 		) and point_in_bounds(
-			self.arc_center + Vec2(0,  1) * self.arc_radius
+			self.arc_center + Vec2( 0, 1) * self.arc_radius
 		) and point_in_bounds(
 			self.arc_center + Vec2(-1, 0) * self.arc_radius
 		) and point_in_bounds(
-			self.arc_center + Vec2(0, -1) * self.arc_radius
+			self.arc_center + Vec2( 0,-1) * self.arc_radius
 		)
 		
 	
@@ -356,8 +356,8 @@ class AccelModelPoint():
 # For these utilities, I'm going to use a polyline approximation because the curves are rather complicated.
 # First, though, we need to collect the acceleration graphs.
 cwd = os.getcwd()
-path = os.path.dirname(os.path.realpath(__file__))
-os.chdir(path)
+_path = os.path.dirname(os.path.realpath(__file__))
+os.chdir(_path)
 
 accel_f = open("acceleration.txt", "r")
 boost_accel_f = open("boost_acceleration.txt", "r")
@@ -1014,14 +1014,19 @@ def get_corner_boost_index(agent):
 	
 	my_car = agent.packet.game_cars[agent.index]
 	
-	s = sign(clamp_abs(my_car.physics.location.y, 5000) - agent.field_info.my_goal.location.y)
-	s2 = sign(my_car.physics.location.x + my_car.physics.velocity.x * 0.5)
+	car_pos = my_car.physics.location
+	car_vel = my_car.physics.velocity
+	
+	s = sign(clamp_abs(car_pos.y, 5000) - agent.field_info.my_goal.location.y)
+	s2 = sign(car_pos.x + car_vel.x * 0.5)
 	
 	max_l = 0
 	max_i = -1
 	
+	car_face = Vec3(1, 0, 0).align_to(my_car.physics.rotation)
+	
 	for i, boost in enumerate(agent.field_info.full_boosts):
-		if sign(clamp_abs(my_car.physics.location.y + max(0, my_car.physics.velocity.y * s) * s, 5000) - boost.location.y + s * (100 - my_car.boost) * 10) == s and sign(boost.location.x) == s2 and agent.packet.game_boosts[boost.index].is_active:
+		if sign(clamp_abs(my_car.physics.location.y + max(0, car_vel.y * s) * s, 5000) - boost.location.y + s * (100 - my_car.boost) * 10) == s and sign(boost.location.x) == s2 and agent.packet.game_boosts[boost.index].is_active and car_face.dot(boost.location - car_pos) > 0:
 			if (boost.location.y - agent.field_info.my_goal.location.y) * s > max_l:
 				max_i = i
 				max_l = (boost.location.y - agent.field_info.my_goal.location.y) * s
@@ -1120,6 +1125,7 @@ def calc_path(path_vec, agent, packet):
 	
 	my_car = packet.game_cars[agent.index]
 	current_t = packet.game_info.seconds_elapsed
+	min_t = agent.hit_package.flip_touch.time
 	
 	target_t = -1
 	drive_path = None
@@ -1127,7 +1133,8 @@ def calc_path(path_vec, agent, packet):
 	for i in range(agent.ball_prediction.num_slices):
 		s = agent.ball_prediction.slices[i]
 		
-		if s.game_seconds - current_t < agent.hit_package.flip_touch.time:
+		t = s.game_seconds - current_t
+		if t < min_t:
 			continue
 		
 		ball = s.physics
@@ -1136,9 +1143,9 @@ def calc_path(path_vec, agent, packet):
 			dp = Line_Arc_Line(my_car, ball.location + ball.velocity * 0.05 + attack_vec.normal(140), attack_vec)
 			if not dp.valid or not dp.check_in_bounds():
 				continue
-			if dp.calc_time(my_car) < i:
+			if dp.calc_time(my_car) < t:
 				drive_path = dp
-				target_t = i
+				target_t = t
 				break
 	
 	# Extra refining

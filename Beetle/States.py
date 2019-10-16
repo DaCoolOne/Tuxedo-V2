@@ -54,37 +54,53 @@ class Carry_Ball(State):
 		my_car = packet.game_cars[agent.index]
 		cbl = (agent.packet.game_ball.physics.location - my_car.physics.location).length()
 		
-		if cbl < 250:
+		if cbl < 250 and agent.packet.game_ball.physics.location.z > 100:
 			Dribble(agent, packet, agent.field_info.opponent_goal.location)
 			
 			car_to_goal = (agent.field_info.opponent_goal.location - my_car.physics.location)
 			
-			car_in_range = any(((car.physics.location + car.physics.velocity * 0.35 - my_car.physics.location - my_car.physics.velocity * 0.35).length() < 400 and car.team != agent.team and not car.is_demolished) for car in packet.game_cars)
-			
-			if car_in_range or (car_to_goal.length() < my_car.physics.velocity.length() * 3 and Vec3(1, 0, 0).align_to(my_car.physics.rotation).dot(car_to_goal.flatten().normal()) > 0.9):
-				Enter_Flick(agent, packet, Vec3(-1, 0))
-				return Defend()
+			if my_car.boost > 50:
+				car_in_range = any(((car.physics.location + car.physics.velocity * 0.6 - my_car.physics.location - my_car.physics.velocity * 0.6).length() < 800 and car.team != agent.team and not car.is_demolished) for car in packet.game_cars)
+				
+				if car_in_range or (car_to_goal.length() < my_car.physics.velocity.length() * 3 and Vec3(1, 0, 0).align_to(my_car.physics.rotation).dot(car_to_goal.flatten().normal()) > 0.9):
+					agent.controller_state.jump = True
+					agent.maneuver = Air_Dribble(agent, packet)
+					agent.maneuver_complete = False
+					return Take_Shot(agent)
+			else:
+				car_in_range = any(((car.physics.location + car.physics.velocity * 0.35 - my_car.physics.location - my_car.physics.velocity * 0.35).length() < 400 and car.team != agent.team and not car.is_demolished) for car in packet.game_cars)
+				
+				if car_in_range or (car_to_goal.length() < my_car.physics.velocity.length() * 3 and Vec3(1, 0, 0).align_to(my_car.physics.rotation).dot(car_to_goal.flatten().normal()) > 0.9):
+					Enter_Flick(agent, packet, Vec3(-1, 0))
+					return Take_Shot(agent)
 			
 		else:
 			bounce = self.next_bounce(agent, packet)
 			
-			agent.controller_state = drive(agent, packet, bounce.physics.location, bounce.game_seconds - packet.game_info.seconds_elapsed, sensitive_boost = True, avoid_walls = False)
+			if bounce is None:
+				return Defend()
 			
-			if agent.hit_package.ground_touch.time > agent.hit.hit_time - 0.9:
+			if cbl < 400:
+				Dribble(agent, packet, agent.field_info.opponent_goal.location)
+			else:
+				agent.controller_state = drive(agent, packet, agent.hit_package.ground_touch.location - Vec3(10).align_to(my_car.physics.rotation), agent.hit_package.ground_touch.time, sensitive_boost = False, avoid_walls = False)
+			
+			
+			
+			if agent.hit_package.ground_touch.time > agent.hit.hit_time - 0.5:
 				return Defend()
 			
 		
-		if agent.packet.game_ball.physics.location.z < 120 or not my_car.has_wheel_contact or bTOGT != -1 or ((packet.game_ball.physics.location - agent.field_info.my_goal.location).length() < 2500 and packet.game_ball.physics.velocity.dot(agent.field_info.my_goal.direction) < 0):
+		if not my_car.has_wheel_contact or bTOGT != -1 or ((packet.game_ball.physics.location - agent.field_info.my_goal.location).length() < 2000 and packet.game_ball.physics.velocity.dot(agent.field_info.my_goal.direction) < 0):
 			return Defend()
 	
 	def next_bounce(self, agent, packet):
+		gt = packet.game_info.seconds_elapsed
 		for slice in agent.ball_prediction.slices:
-			if slice.physics.location.z < 150 and slice.game_seconds > packet.game_info.seconds_elapsed:
+			if slice.physics.velocity.z < -10 and slice.game_seconds > gt and abs(slice.physics.location.z - 115) < 10:
 				return slice
 
 class Defend(State):
-	def __init__(self):
-		self.carry_timer = 0
 	
 	def output(self, agent, packet):
 		
@@ -104,32 +120,19 @@ class Defend(State):
 		
 		my_goal = agent.field_info.my_goal
 		
-		# if agent.field_info.my_goal.direction.dot((packet.game_ball.physics.location - my_car.physics.location).normal()) < -0.1 and (abs(dest.x) < 1200 or dest.y * my_goal.direction.y > -4000):
-			# dest += Vec3(200 * sign(my_car.physics.location.x - packet.game_ball.physics.location.x), -agent.field_info.my_goal.direction.y * 500, 0)
-			# agent.controller_state = drive(agent, packet, dest, touch.time - 0.2, allow_flips=True)
+		# drive_path = calc_path(Shot_To_Side(), agent, packet)
+		
+		# if drive_path.drive_path is None or drive_path.time > agent.hit.hit_time + 0.75:
+		JumpShot_Handler(agent, packet)
 		# else:
-			# agent.controller_state = drive(agent, packet, dest, touch.time, allow_flips=True)
-		
-		# if (dest - my_car.physics.location).dot(agent.field_info.my_goal.direction) > 0:
-			# JumpShot_Handler(agent, packet)
-		# else:
-		
-		drive_path = calc_path(Shot_To_Side(), agent, packet)
-		
-		# if drive_path.drive_path is None or drive_path.time > agent.hit.hit_time - 0.75:
-			# drive_path = calc_path(Shot_To_Side(), agent, packet)
-		
-		if drive_path.drive_path is None or drive_path.time > agent.hit.hit_time + 0.05:
-			JumpShot_Handler(agent, packet)
-		else:
-			self.driver = Line_Arc_Line_Driver(agent, packet, drive_path.drive_path, execute_time = drive_path.time)
-			self.driver.update(agent, packet)
+			# self.driver = Line_Arc_Line_Driver(agent, packet, drive_path.drive_path, execute_time = drive_path.time)
+			# self.driver.update(agent, packet)
 			
-			car_to_p1 = (drive_path.drive_path.p1 - my_car.physics.location).inflate()
+			# car_to_p1 = (drive_path.drive_path.p1 - my_car.physics.location).inflate()
 			
-			if Vec3(1, 0, 0).align_to(my_car.physics.rotation).dot(car_to_p1.normal()) > 0.95 and car_to_p1.length() < 1000:
-				agent.maneuver_complete = False
-				agent.maneuver = self.driver
+			# if Vec3(1, 0, 0).align_to(my_car.physics.rotation).dot(car_to_p1.normal()) > 0.95:
+				# agent.maneuver_complete = False
+				# agent.maneuver = self.driver
 			
 		
 		# tried to shoehorn jumpshot in here, failed epicly
@@ -152,17 +155,17 @@ class Defend(State):
 		
 		pad_grab_time_2 = calc_hit(my_car, agent.field_info.full_boosts[c_boost].location).time + Time_to_Pos((agent.field_info.full_boosts[c_boost].location - touch.location).length(), 0, 100).time if c_boost >= 0 else 10000
 		
-		# if agent.hit_package.ground_touch.time < hit.hit_time - 2 and agent.hit_package.ground_touch.time < 1.2 and ball.location.z > 120 and bTOGT == -1 and (ball.location - agent.field_info.my_goal.location).length() > 2000:
-			# return Carry_Ball()
-		if (touch.time < hit.hit_time - 0.5 and b_g_o_len < 4000):
+		if agent.hit_package.ground_touch.time < hit.hit_time - 1 and agent.hit_package.ground_touch.time < 3 and agent.hit_package.flip_touch.location.z > 150 and bTOGT == -1 and (ball.location - agent.field_info.my_goal.location).length() > 2500 and my_car.physics.velocity.dot(agent.field_info.my_goal.location - my_car.physics.location) < 0:
+			return Carry_Ball()
+		elif (touch.time < hit.hit_time - 0.5 and b_g_o_len < 4000):
 			return Take_Shot(agent)
-		elif agent.touch_type == TouchType.aerial and touch.is_garunteed and touch.time > 1 and touch.location.z > 300:
+		elif agent.touch_type == TouchType.aerial and touch.is_garunteed and touch.time > 1 and touch.location.z > 300 and (not agent.hit_package.flip_touch.is_garunteed or bTOGT != -1):
 			if my_goal.direction.dot(my_car.physics.location - touch.location) > 0.0:
 				return Align_For_Aerial(agent, packet, my_goal.direction * -90 + Vec3(sign(touch.location.x) * 40, 0, -80))
 			else:
 				return Align_For_Aerial(agent, packet, my_goal.direction * -100 + Vec3(0, 0, -80))
-		elif my_car.boost < 70 and touch.time > 1 and ((pad_grab_time < (hit.hit_time + (hit.hit_position - my_goal.location).length() / max(1, hit.hit_velocity * 1.75)) - 0.5 and touch.time > hit.hit_time) or pad_grab_time_2 < touch.time) and (pad_grab_time < bTOGT or bTOGT == -1) and touch.time < hit.hit_time + 2:
-			return Grab_Boost()
+		elif my_car.boost < 70 and touch.time > 1 and ((pad_grab_time < (hit.hit_time + (hit.hit_position - my_goal.location).length() / max(1, hit.hit_velocity * 1.75)) - 0.5 and touch.time > hit.hit_time) or pad_grab_time_2 < touch.time) and (pad_grab_time < (bTOGT - packet.game_info.seconds_elapsed) or bTOGT == -1) and touch.time < hit.hit_time + 1:
+			return Grab_Boost(agent)
 		
 
 class Wait_For_Shot(State):
@@ -222,7 +225,7 @@ class Wait_For_Shot(State):
 		elif any((agent.team != car.team and car.has_dribble) for car in packet.game_cars):
 			return Defend()
 		elif ((touch.time > 4 or hit.hit_time > 3) and my_car.boost < 80 and c_boost >= 0):
-			s = Grab_Boost()
+			s = Grab_Boost(agent)
 			return s
 		elif (d_p_v < math.pi * 0.4 and d_p_v_2 < math.pi * 0.3 and touch.time < hit.hit_time - 0.5 and b_g_o_len < 6000):
 			return Take_Shot(agent)
@@ -256,42 +259,41 @@ class Take_Shot(State):
 		my_car = packet.game_cars[agent.index]
 		touch = agent.touch.copy()
 		
-		# ideal_time = self.get_ball_in_box_time(agent, packet)
+		bTOGT = ball_in_opponent_goal_time(agent, packet)
 		
-		# touch.time = max(ideal_time, touch.time)
-		# touch.location = agent.hit.ball_at_t(agent, packet, agent.ball_prediction, touch.time) #.physics.location
+		agent.renderer.draw_string_3d(packet.game_ball.physics.location.UI_Vec3(), 5, 5, str(bTOGT), agent.renderer.blue())
 		
-		if drive_path.drive_path is None or drive_path.time > agent.hit.hit_time - 0.75 or (my_car.physics.location - touch.location).normal().dot(my_car.physics.velocity.normal()) > 0.3:
+		if bTOGT != -1 and bTOGT - packet.game_info.seconds_elapsed < agent.hit.hit_time:
+			vec = packet.game_ball.physics.location - my_car.physics.location
+			agent.controller_state = drive(agent, packet, my_car.physics.location - vec, 0.1)
+		else:
+			# ideal_time = self.get_ball_in_box_time(agent, packet)
+			
+			# touch.time = max(ideal_time, touch.time)
+			# touch.location = agent.hit.ball_at_t(agent, packet, agent.ball_prediction, touch.time) #.physics.location
 			
 			JumpShot_Handler(agent, packet, cautious = False)
 			
-		else:
-			self.driver = Line_Arc_Line_Driver(agent, packet, drive_path.drive_path, execute_time = drive_path.time)
-			self.driver.update(agent, packet)
+			b_g_o = (touch.location - agent.field_info.opponent_goal.location).flatten()
 			
-			car_to_p1 = (drive_path.drive_path.p1 - my_car.physics.location).inflate()
+			b_g_o_len = b_g_o.length()
 			
-			if Vec3(1, 0, 0).align_to(my_car.physics.rotation).dot(car_to_p1.normal()) > 0.95 and car_to_p1.length() < my_car.physics.velocity.length():
-				agent.maneuver_complete = False
-				agent.maneuver = self.driver
-		
-		b_g_o = (touch.location - agent.field_info.opponent_goal.location).flatten()
-		
-		b_g_o_len = b_g_o.length()
-		
-		if b_g_o_len > 5000 or not touch.is_garunteed:
-			return Defend()
-		elif agent.touch_type == TouchType.aerial and touch.time > 1 and touch.location.z > 300:
-			return Align_For_Aerial(agent, packet, (touch.location - agent.field_info.opponent_goal.location.flatten()).normal(130))
+			if b_g_o_len > 5000 or not touch.is_garunteed:
+				return Defend()
+			elif agent.touch_type == TouchType.aerial and touch.time > 1 and touch.location.z > 300:
+				return Align_For_Aerial(agent, packet, (touch.location - agent.field_info.opponent_goal.location.flatten()).normal(130))
 		
 
 class Grab_Boost(State):
+	def __init__(self, agent):
+		self.boost_index = get_corner_boost_index(agent)
+	
 	def output(self, agent, packet):
 		my_car = packet.game_cars[agent.index]
 		
 		c_boost = get_corner_boost_index(agent)
 		
-		if c_boost < 0:
+		if c_boost < 0 or self.boost_index != c_boost:
 			return Defend()
 		
 		# Collect a boost pad
