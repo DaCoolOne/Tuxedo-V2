@@ -114,6 +114,8 @@ class Beetle(BaseAgent):
 	
 	def get_output(self, gtp: GameTickPacket):
 		
+		self.renderer.begin_rendering()
+		
 		self.Preprocessing(gtp)
 		
 		if self.delta == 0:
@@ -124,8 +126,6 @@ class Beetle(BaseAgent):
 		self.controller_state = MyControllerState()
 		
 		my_goal = self.field_info.my_goal
-		
-		self.renderer.begin_rendering()
 		
 		if USE_HELPER_PROCESS:
 			# Wait for hit to be created if we haven't created a hit package yet
@@ -182,10 +182,10 @@ class Beetle(BaseAgent):
 			self.renderer.draw_string_3d((my_car.physics.location).UI_Vec3(), 2, 2, type(self.state).__name__, self.renderer.yellow())
 			
 		
-		self.renderer.end_rendering()
-		
 		self.controller_state.boost = self.controller_state.boost and my_car.physics.velocity.length() < 2275
 		self.controller_state.jump = self.controller_state.jump and self.packet.game_info.is_round_active
+		
+		self.renderer.end_rendering()
 		
 		return self.controller_state.get()
 	
