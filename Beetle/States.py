@@ -159,13 +159,13 @@ class Defend(State):
 			return Carry_Ball()
 		elif (touch.time < hit.hit_time - 0.5 and b_g_o_len < 4000):
 			return Take_Shot(agent)
+		elif my_car.boost < 70 and touch.time > 0.5 and ((pad_grab_time < (hit.hit_time + (hit.hit_position - my_goal.location).length() / max(1, hit.hit_velocity * 1.5)) and touch.time > hit.hit_time) or pad_grab_time_2 < touch.time) and (pad_grab_time < (bTOGT - packet.game_info.seconds_elapsed) or bTOGT == -1) and touch.time < hit.hit_time + 0.5:
+			return Grab_Boost(agent)
 		elif agent.touch_type == TouchType.aerial and touch.is_garunteed and touch.time > 1 and touch.location.z > 300 and (not agent.hit_package.flip_touch.is_garunteed or bTOGT != -1):
 			if my_goal.direction.dot(my_car.physics.location - touch.location) > 0.0:
 				return Align_For_Aerial(agent, packet, my_goal.direction * -90 + Vec3(sign(touch.location.x) * 40, 0, -80))
 			else:
 				return Align_For_Aerial(agent, packet, my_goal.direction * -100 + Vec3(0, 0, -80))
-		elif my_car.boost < 70 and touch.time > 1 and ((pad_grab_time < (hit.hit_time + (hit.hit_position - my_goal.location).length() / max(1, hit.hit_velocity * 1.5)) and touch.time > hit.hit_time) or pad_grab_time_2 < touch.time) and (pad_grab_time < (bTOGT - packet.game_info.seconds_elapsed) or bTOGT == -1) and touch.time < hit.hit_time + 0.5:
-			return Grab_Boost(agent)
 		
 
 class Wait_For_Shot(State):
@@ -281,8 +281,8 @@ class Take_Shot(State):
 			if b_g_o_len > 5000 or not touch.is_garunteed:
 				return Defend()
 			elif agent.touch_type == TouchType.aerial and touch.time > 1 and touch.location.z > 300:
-				return Align_For_Aerial(agent, packet, (touch.location - agent.field_info.opponent_goal.location.flatten()).normal(130))
-		
+				return Align_For_Aerial(agent, packet, (touch.location - agent.field_info.opponent_goal.location.flatten()).normal(120))
+	
 
 class Grab_Boost(State):
 	def __init__(self, agent):

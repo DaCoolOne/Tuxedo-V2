@@ -743,9 +743,9 @@ def Dribble(self, packet, position: Vec3):
 	
 	angle = clamp(correction(my_car, dir_vec.normal()) * 2, -math.pi * 0.7, math.pi * 0.7)
 	
-	dir = Vec3(car_direction.y * math.sin(-angle) * 2 - car_direction.x * math.cos(-angle), -car_direction.y * math.cos(-angle) * 2 - car_direction.x * math.sin(-angle), 0.0)
+	dir = Vec3(car_direction.y * math.sin(-angle) * 2 - car_direction.x * math.cos(-angle) * 1.25, -car_direction.y * math.cos(-angle) * 2 - car_direction.x * math.sin(-angle) * 1.25, 0.0)
 	
-	multiplier = 0.5
+	multiplier = 0.25
 	
 	if Vec3(car_pos.x - ball_pos.x, car_pos.y - ball_pos.y, 0.0).length() < 250.0 and abs(ball_vel.z) < 300.0 and ball_predict.location.z < 200.0:
 		multiplier = 1
