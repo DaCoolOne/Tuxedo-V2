@@ -125,6 +125,9 @@ class Beetle(BaseAgent):
 		
 		self.controller_state = MyControllerState()
 		
+		boost_c = get_corner_boost_index(self)
+		self.renderer.draw_line_3d(self.field_info.full_boosts[boost_c].location.UI_Vec3(), my_car.physics.location.UI_Vec3(), self.renderer.purple())
+		
 		my_goal = self.field_info.my_goal
 		
 		if USE_HELPER_PROCESS:
