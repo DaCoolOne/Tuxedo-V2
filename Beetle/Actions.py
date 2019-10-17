@@ -351,7 +351,7 @@ class Air_Dribble(Maneuver):
 		agent.controller_state.jump = t_since_touch < 0.15 # or (t_since_touch > 0.3 and t_since_touch < 0.35)
 		
 		my_car = packet.game_cars[agent.index]
-		car_pos = pos(my_car) + Vec3(0, 0, 20).align_to(my_car.physics.rotation) #10
+		car_pos = pos(my_car) + Vec3(0, 0, 10).align_to(my_car.physics.rotation) #10
 		
 		# Air dribble stuff:
 		# self.air_dribble_start
@@ -919,7 +919,7 @@ class Kickoff(Maneuver):
 			if self.kickoff_type == KICKOFF.DIAGONAL:
 				offset = Vec3()
 			else:
-				offset = Vec3(self.kickoff_dir * 40, 0, 0)
+				offset = Vec3(self.kickoff_dir * 60, 0, 0)
 			
 			ball_pos_real += offset
 			
