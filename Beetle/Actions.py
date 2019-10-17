@@ -479,7 +479,7 @@ def drive(agent, packet, target_loc, time_allotted, target_v=-1, min_straight_sp
 	elif speed_err > 0 and speed_err < 200:
 		cs.throttle = 0
 	else:
-		cs.throttle = -speed_err * 0.01
+		cs.throttle = -speed_err * 0.01 + 0.03
 		# cs.throttle = 1
 	
 	should_boost = current_speed < 2275 and (always_boost or speed_err < -200 or (sensitive_boost and speed_err < -100))
@@ -1037,7 +1037,7 @@ def JumpShot_Handler(agent,packet,ideal_time = 0, perfect_world = False, cautiou
 	
 	hit = agent.hit
 	
-	rolling = abs(packet.game_ball.physics.velocity.z) < 400 and packet.game_ball.physics.location.z < 300
+	rolling = abs(packet.game_ball.physics.velocity.z) < 1000 and packet.game_ball.physics.location.z < 300
 	
 	enemyGoal = agent.field_info.opponent_goal.location - agent.field_info.opponent_goal.direction * 93
 	myGoal = agent.field_info.my_goal.closest_point(packet.game_ball.physics.location) - agent.field_info.my_goal.direction * 93
@@ -1062,10 +1062,10 @@ def JumpShot_Handler(agent,packet,ideal_time = 0, perfect_world = False, cautiou
 		direction = (enemyGoal - touch.location).flatten().normal()
 	
 	if rolling and (touch.location - my_car.physics.location).normal().dot(direction) < 0 and cautious:
-		direction = Vec3(sign(touch.location.x), agent.field_info.my_goal.direction.y).normal()
+		direction = Vec3(sign(touch.location.x), agent.field_info.my_goal.direction.y * 0.25).normal()
 	
-	if rolling and (touch.location - my_car.physics.location).normal().dot(direction) < -0.4 and cautious:
-		direction = Vec3(sign(touch.location.x - car_location.x), agent.field_info.my_goal.direction.y).normal()
+	if rolling and (touch.location - my_car.physics.location).normal().dot(direction) < -0.7 and cautious:
+		direction = Vec3(sign(touch.location.x - car_location.x), 0.25).normal()
 	
 	# + Vec3(20).align_to(car.physics.rotation) 
 	# Refine the touch
